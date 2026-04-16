@@ -39,3 +39,6 @@ dependency-reduced-pom.xml
 
 # Claude Code project documentation
 CLAUDE.md
+
+simulate_last_n_prs.sh
+cherry-pick-103x-ci.sh
