@@ -1,0 +1,66 @@
+name: 'CI :: CI Tests'
+
+# Snapshot tests for the CI scripts themselves.
+# Runs CiComputeBuildScopes against fixed inputs and asserts the produced
+# upstream / affected lists match committed golden files. Any divergence —
+# modules moved, added, removed, or dependency edges changed — fails the
+# test and prompts a targeted update of the goldens.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+    branches: [103x-ci]
+  push:
+    branches: [103x-ci]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci-compute-build-scopes:
+    if: github.event.action != 'closed'
+    name: 'CiComputeBuildScopesTest'
+    runs-on: ubuntu-latest
+    steps:
+      - name: "SETUP :: Checkout to load local actions"
+        uses: actions/checkout@v6
+
+      - name: "SETUP :: Checkout @ Simulated squashed-merge if PR, else checkout current commit"
+        id: checkout_pr
+        uses: ./.github/actions/checkout-pr
+        with:
+          ref: ${{ github.base_ref }}
+
+      - uses: actions/setup-java@v5
+        name: 'SETUP :: Java 21'
+        with:
+          java-version: 21
+          distribution: temurin
+          cache: maven
+
+      - uses: jbangdev/setup-jbang@2b1b465a7b75f4222b81426f23a01e013aa7b95c
+        name: 'SETUP :: Install JBang'
+
+      - name: 'SETUP :: Block apache.snapshots Maven repository'
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.m2"
+          cat > "$HOME/.m2/settings.xml" <<'EOF'
+          <settings xmlns="http://maven.apache.org/SETTINGS/1.2.0"
+                    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                    xsi:schemaLocation="http://maven.apache.org/SETTINGS/1.2.0 https://maven.apache.org/xsd/settings-1.2.0.xsd">
+            <mirrors>
+              <mirror>
+                <id>block-apache-snapshots</id>
+                <mirrorOf>apache.snapshots,apache-snapshot-repository</mirrorOf>
+                <url>https://repository.apache.org/snapshots/</url>
+                <blocked>true</blocked>
+              </mirror>
+            </mirrors>
+          </settings>
+          EOF
+
+      - name: 'TEST :: Run CiComputeBuildScopesTest'
+        shell: bash
+        run: jbang script/ci-tests/CiComputeBuildScopesTest.java
