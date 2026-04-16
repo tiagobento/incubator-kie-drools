@@ -28,14 +28,20 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: "SETUP :: Checkout to load local actions"
         uses: actions/checkout@v6
+
+      - name: "SETUP :: Checkout @ Simulated squashed-merge if PR, else checkout current commit"
+        id: checkout_pr
+        uses: ./.github/actions/checkout-pr
+        with:
+          ref: ${{ github.base_ref }}
 
       - name: Download Apache RAT
         run: |
           curl -LO https://repo1.maven.org/maven2/org/apache/rat/apache-rat/0.17/apache-rat-0.17.jar
 
-      - name: Run Apache RAT
+      - name: 'TEST :: Run Apache RAT'
         run: |
           # Redirect output to .rat-reports file, continue even if RAT returns non-zero exit code because we want to print Unapproved documents
           java -jar apache-rat-0.17.jar --input-exclude-file .rat-excludes -- . > .rat-reports 2>&1 || true
