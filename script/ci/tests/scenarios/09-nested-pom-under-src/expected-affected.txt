@@ -1,0 +1,7 @@
+org.drools.testcoverage:drools-test-coverage-jars-with-invoker
+org.kie:kie-archetypes
+org.kie:kie-drools-dmn-archetype
+org.kie:kie-drools-exec-model-archetype
+org.kie:kie-drools-exec-model-ruleunit-archetype
+org.kie:kie-drools-yaml-archetype
+org.kie:kie-maven-plugin
