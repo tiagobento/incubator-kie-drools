@@ -243,6 +243,12 @@
       <groupId>org.drools</groupId>
       <artifactId>drools-ruleunits-impl</artifactId>
     </dependency>
+    <!-- not a plugin dependency; ensures it's in the local repo before ITs run -->
+    <dependency>
+      <groupId>org.drools</groupId>
+      <artifactId>drools-ruleunits-engine</artifactId>
+      <scope>test</scope>
+    </dependency>
     <!-- Include all dependencies needed to support all resource types out-of-the-box -->
     <dependency>
       <groupId>org.drools</groupId>
