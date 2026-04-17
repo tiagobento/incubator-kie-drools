@@ -22,6 +22,7 @@ import static java.lang.Character.isWhitespace;
 
 public class AstUtil {
     public static boolean isEmpty(final CharSequence str) {
+        System.out.println("Changes 1");
         if ( str == null || str.length() == 0 ) {
             return true;
         }
