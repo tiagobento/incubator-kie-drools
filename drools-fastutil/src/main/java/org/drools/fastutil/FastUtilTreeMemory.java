@@ -40,6 +40,7 @@ public class FastUtilTreeMemory extends AbstractTupleIndexTree implements TupleM
 
     private TreeFastIterator fastIterator;
 
+    // Simple inserted comment between lines 38 and 39
     private TreeFastFullIterator fullFastIterator;
 
     private TupleList nullTupleList;

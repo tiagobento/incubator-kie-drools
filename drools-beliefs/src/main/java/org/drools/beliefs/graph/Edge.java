@@ -21,5 +21,6 @@ package org.drools.beliefs.graph;
 public interface Edge {
     public GraphNode getOutGraphNode();
 
+    // Simple inserted comment between lines 21 and 22
     public GraphNode getInGraphNode();
 }
