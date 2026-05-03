@@ -26,7 +26,7 @@ on:
     types: [opened, synchronize, reopened, closed]
     branches: [103x-ci]
   push:
-    branches: [103x-ci]
+    branches: [103x-ci]  
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
