@@ -128,3 +128,64 @@ target/
 quarkus/integration-tests/integration-tests-quarkus-gradle/integration-tests-quarkus-gradle-project/**
 /kogito-gradle-plugin-test/.gradle/
 /kogito-gradle-plugin-test/build/
+# --- merged from kogito-apps .gitignore ---
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+
+node_modules/
+dist/
+dist-it/
+node/
+coverage/
+target/
+out/
+.idea
+**/.DS_Store
+*.log*
+**/stats.json
+**/junit.xml
+package-lock.json
+
+# Eclipse, Netbeans and IntelliJ files
+/.*
+!.github
+!.gitignore
+!.ci
+!.mvn
+/nbproject
+/*.ipr
+/*.iws
+**/*.iml
+.classpath
+.project
+.settings
+.vscode
+!.husky
+
+# Cypress - runtime artifacts and undesired dirs
+**/cypress/screenshots
+**/cypress/videos
+/packages/cypress*
+/cypress*
+
+.factorypath
+
+# Apache RAT check excludes file
+!.rat-excludes
+
+# Jobs Service ITs
+apps-integration-tests/integration-tests-jobs-service/**/src/main/resources/shared/
