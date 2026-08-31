@@ -29,22 +29,47 @@ import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
 import org.kie.kogito.internal.process.runtime.KogitoProcessInstance;
 import org.kie.kogito.internal.process.runtime.KogitoProcessRuntime;
 
+/**
+ * The context an expression is evaluated in when there is no process instance behind it - a data-association
+ * transformation, for instance, which is a pure mapping over the values being passed.
+ */
 public class EmtpyKogitoProcessContext implements KogitoProcessContext {
 
-    private Function<String, Object> resolver;
+    private final Function<String, Object> resolver;
+    private final Map<String, Object> variables;
 
     public EmtpyKogitoProcessContext(Function<String, Object> resolver) {
+        this(resolver, Collections.emptyMap());
+    }
+
+    /**
+     * Where the values are known up front. A language that needs the whole scope, rather than a name at a time, can
+     * only work from this.
+     */
+    public EmtpyKogitoProcessContext(Map<String, Object> variables) {
+        this(variables::get, variables);
+    }
+
+    private EmtpyKogitoProcessContext(Function<String, Object> resolver, Map<String, Object> variables) {
         this.resolver = resolver;
+        this.variables = variables;
+    }
+
+    /**
+     * The values in scope, or empty when this context can only resolve a name at a time.
+     */
+    public Map<String, Object> getVariables() {
+        return variables;
     }
 
     @Override
     public KogitoProcessInstance getProcessInstance() {
-        throw new UnsupportedOperationException();
+        return null;
     }
 
     @Override
     public KogitoNodeInstance getNodeInstance() {
-        throw new UnsupportedOperationException();
+        return null;
     }
 
     @Override
@@ -59,7 +84,7 @@ public class EmtpyKogitoProcessContext implements KogitoProcessContext {
 
     @Override
     public KieRuntime getKieRuntime() {
-        throw new UnsupportedOperationException();
+        return null;
     }
 
     @Override

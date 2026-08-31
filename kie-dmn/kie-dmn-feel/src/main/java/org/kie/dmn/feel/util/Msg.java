@@ -36,6 +36,7 @@ public final class Msg {
     public static final Message2 EXPRESSION_IS_RANGE_BUT_VALUE_IS_NOT_COMPARABLE = new Message2("Value '%s' is not comparable with range '%s'");
     public static final Message0 CONDITION_WAS_NOT_A_BOOLEAN = new Message0("Condition was not a Boolean");
     public static final Message1 FUNCTION_NOT_FOUND = new Message1("Function not found: '%s'");
+    public static final Message1 EXTERNAL_FUNCTIONS_DISABLED = new Message1("External functions are disabled on this FEEL engine, expression rejected: %s");
     public static final Message1 ERROR_EXECUTING_LIST_FILTER = new Message1("Error executing list filter: %s");
     public static final Message2 INDEX_OUT_OF_BOUND = new Message2("Index out of bound: list of %s elements, index %s; will evaluate as FEEL null");
     public static final Message2 X_TYPE_INCOMPATIBLE_WITH_Y_TYPE = new Message2("%s type incompatible with %s type");

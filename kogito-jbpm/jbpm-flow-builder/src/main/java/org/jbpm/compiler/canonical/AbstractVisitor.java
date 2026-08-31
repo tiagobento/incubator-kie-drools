@@ -32,6 +32,7 @@ import org.jbpm.ruleflow.core.WorkflowElementIdentifierFactory;
 import org.kie.api.definition.process.NodeContainer;
 import org.kie.api.definition.process.WorkflowElementIdentifier;
 import org.kie.kogito.internal.process.runtime.KogitoNode;
+import org.kie.kogito.internal.utils.ConversionUtils;
 
 import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.expr.ClassExpr;
@@ -84,7 +85,9 @@ public abstract class AbstractVisitor {
         if (value == null) {
             return new NullLiteralExpr();
         }
-        return new StringLiteralExpr(value);
+        // an interpolated value can contain a quote of its own - a FEEL string always does - and JavaParser does not
+        // escape one for us
+        return new StringLiteralExpr(ConversionUtils.sanitizeString(value));
     }
 
     protected void visitMetaData(Map<String, Object> metadata, BlockStmt body, String variableName) {

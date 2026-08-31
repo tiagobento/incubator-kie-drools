@@ -76,8 +76,8 @@ public class TaskHandler extends AbstractNodeHandler {
         workItemNode.setMetaData("DataInputs", new HashMap<String, String>());
         workItemNode.setMetaData("DataOutputs", new HashMap<String, String>());
 
-        handleScript(workItemNode, element, "onEntry");
-        handleScript(workItemNode, element, "onExit");
+        handleScript(parser, workItemNode, element, "onEntry");
+        handleScript(parser, workItemNode, element, "onExit");
 
         String compensation = element.getAttribute("isForCompensation");
         if (compensation != null) {

@@ -42,7 +42,6 @@ import java.util.stream.Stream;
 
 import org.drools.core.common.InternalKnowledgeRuntime;
 import org.drools.mvel.MVELSafeHelper;
-import org.drools.mvel.util.MVELEvaluator;
 import org.jbpm.process.core.ContextContainer;
 import org.jbpm.process.core.ContextResolver;
 import org.jbpm.process.core.context.exception.CompensationScope;
@@ -54,11 +53,14 @@ import org.jbpm.process.instance.ContextInstance;
 import org.jbpm.process.instance.InternalProcessRuntime;
 import org.jbpm.process.instance.context.variable.VariableScopeInstance;
 import org.jbpm.process.instance.impl.ProcessInstanceImpl;
+import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.ruleflow.core.WorkflowElementIdentifierFactory;
+import org.jbpm.util.ContextFactory;
 import org.jbpm.util.PatternConstants;
 import org.jbpm.workflow.core.DroolsAction;
 import org.jbpm.workflow.core.Node;
+import org.jbpm.workflow.core.WorkflowProcess;
 import org.jbpm.workflow.core.impl.NodeImpl;
 import org.jbpm.workflow.core.node.BoundaryEventNode;
 import org.jbpm.workflow.core.node.CompositeContextNode;
@@ -923,6 +925,13 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
         return resolveVariable(s, new ProcessInstanceResolverFactory(this));
     }
 
+    /**
+     * The expression language this process selected on <code>&lt;definitions expressionLanguage&gt;</code>.
+     */
+    private String expressionLanguage() {
+        return getProcess() instanceof WorkflowProcess ? ((WorkflowProcess) getProcess()).getExpressionLanguage() : null;
+    }
+
     private Object resolveVariable(String s, VariableResolverFactory factory) {
         VariableScope var = (VariableScope) ((ContextResolver) this.getProcess()).resolveContext(VariableScope.VARIABLE_SCOPE, s);
         if (var != null) {
@@ -940,8 +949,9 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
                     replacements.put(paramName, variableValue.toString());
                 } else {
                     try {
-                        MVELEvaluator mvelEvaluator = MVELProcessHelper.evaluator();
-                        variableValue = mvelEvaluator.eval(paramName, factory);
+                        variableValue = InterpolationEvaluator.evaluate(expressionLanguage(), paramName,
+                                () -> factory,
+                                () -> BpmnFeelVariables.forInterpolation(ContextFactory.fromProcessInstance(this)));
                         String variableValueString = variableValue == null ? "" : variableValue.toString();
                         replacements.put(paramName, variableValueString);
                     } catch (Exception t) {

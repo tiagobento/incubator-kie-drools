@@ -16,11 +16,20 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.kie.kogito.process.expr;
+package org.kie.dmn.feel.exceptions;
 
-public interface ExpressionHandler {
+import java.io.Serial;
 
-    Expression get(String expr);
+/**
+ * Raised when an expression declares an <code>external</code> function on a FEEL engine that was built with
+ * {@code FEELBuilder.withExternalFunctionsDisabled()}.
+ */
+public class ExternalFunctionsDisabledException extends RuntimeException {
 
-    String lang();
+    @Serial
+    private static final long serialVersionUID = -6132048185563751079L;
+
+    public ExternalFunctionsDisabledException(String message) {
+        super(message);
+    }
 }

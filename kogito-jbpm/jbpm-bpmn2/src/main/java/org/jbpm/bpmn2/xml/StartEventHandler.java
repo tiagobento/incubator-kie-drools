@@ -37,6 +37,7 @@ import org.jbpm.process.core.event.NonAcceptingEventTypeFilter;
 import org.jbpm.process.core.timer.Timer;
 import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.impl.DroolsConsequenceAction;
 import org.jbpm.workflow.core.node.ConstraintTrigger;
@@ -81,6 +82,13 @@ public class StartEventHandler extends AbstractNodeHandler {
         return StartNode.class;
     }
 
+    /**
+     * A condition with no language of its own follows the document default; MVEL otherwise, as before.
+     */
+    private static String documentLanguageOrDefault(Parser parser) {
+        return DefinitionsHandler.isFeelDocument(parser) ? ExpressionLanguages.FEEL : ExpressionLanguages.MVEL;
+    }
+
     @Override
     @SuppressWarnings("unchecked")
     protected Node handleNode(final Node node, final Element element, final String uri,
@@ -122,7 +130,8 @@ public class StartEventHandler extends AbstractNodeHandler {
                 startNode.setMetaData(EVENT_TYPE, EVENT_TYPE_CONDITIONAL);
                 startNode.setMetaData(TRIGGER_REF, "Conditional");
                 startNode.setMetaData(TRIGGER_EXPRESSION, constraint);
-                startNode.setMetaData(TRIGGER_EXPRESSION_LANGUAGE, language);
+                startNode.setMetaData(TRIGGER_EXPRESSION_LANGUAGE,
+                        language == null || language.isBlank() ? documentLanguageOrDefault(parser) : language);
                 startNode.addTrigger(trigger);
                 ((RuleFlowProcess) ((ProcessBuildData) parser.getData()).getMetaData(ProcessHandler.CURRENT_PROCESS))
                         .setMetaData(Metadata.CONDITION, Boolean.TRUE);

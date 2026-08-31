@@ -34,8 +34,6 @@ import org.jbpm.workflow.core.impl.ConnectionImpl;
 import org.jbpm.workflow.core.impl.ExtendedNodeImpl;
 import org.kie.api.definition.process.NodeType;
 import org.kie.api.definition.process.WorkflowElementIdentifier;
-import org.kie.kogito.process.expr.Expression;
-import org.kie.kogito.process.expr.ExpressionHandlerFactory;
 
 /**
  * A for each node.
@@ -57,7 +55,6 @@ public class ForEachNode extends CompositeContextNode {
 
     private Action finishAction;
     private boolean waitForCompletion = true;
-    private Expression evaluateExpression;
 
     public ForEachNode() {
         this(WorkflowElementIdentifierFactory.newRandom());
@@ -140,14 +137,6 @@ public class ForEachNode extends CompositeContextNode {
 
     public void setCompletionAction(Action finishAction) {
         this.finishAction = finishAction;
-    }
-
-    public Expression getEvaluateExpression() {
-        String exprLanguage = getProcess().getExpressionLanguage();
-        if (evaluateExpression == null && ExpressionHandlerFactory.isSupported(exprLanguage)) {
-            evaluateExpression = ExpressionHandlerFactory.get(exprLanguage, collectionExpression);
-        }
-        return evaluateExpression;
     }
 
     public String getOutputVariableName() {

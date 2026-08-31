@@ -24,7 +24,6 @@ import org.jbpm.ruleflow.core.factory.TimerNodeFactory;
 import org.jbpm.workflow.core.node.TimerNode;
 
 import com.github.javaparser.ast.expr.IntegerLiteralExpr;
-import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 
 import static org.jbpm.ruleflow.core.factory.TimerNodeFactory.METHOD_DATE;
@@ -52,14 +51,14 @@ public class TimerNodeVisitor extends AbstractNodeVisitor<TimerNode> {
         body.addStatement(getFactoryMethod(getNodeId(node), METHOD_TYPE, new IntegerLiteralExpr(timer.getTimeType())));
 
         if (timer.getTimeType() == Timer.TIME_CYCLE) {
-            body.addStatement(getFactoryMethod(getNodeId(node), METHOD_DELAY, new StringLiteralExpr(timer.getDelay())));
+            body.addStatement(getFactoryMethod(getNodeId(node), METHOD_DELAY, getOrNullExpr(timer.getDelay())));
             if (timer.getPeriod() != null && !timer.getPeriod().isEmpty()) {
-                body.addStatement(getFactoryMethod(getNodeId(node), METHOD_PERIOD, new StringLiteralExpr(timer.getPeriod())));
+                body.addStatement(getFactoryMethod(getNodeId(node), METHOD_PERIOD, getOrNullExpr(timer.getPeriod())));
             }
         } else if (timer.getTimeType() == Timer.TIME_DURATION) {
-            body.addStatement(getFactoryMethod(getNodeId(node), METHOD_DELAY, new StringLiteralExpr(timer.getDelay())));
+            body.addStatement(getFactoryMethod(getNodeId(node), METHOD_DELAY, getOrNullExpr(timer.getDelay())));
         } else if (timer.getTimeType() == Timer.TIME_DATE) {
-            body.addStatement(getFactoryMethod(getNodeId(node), METHOD_DATE, new StringLiteralExpr(timer.getDate())));
+            body.addStatement(getFactoryMethod(getNodeId(node), METHOD_DATE, getOrNullExpr(timer.getDate())));
         }
 
         addNodeMappings(node, body, getNodeId(node));

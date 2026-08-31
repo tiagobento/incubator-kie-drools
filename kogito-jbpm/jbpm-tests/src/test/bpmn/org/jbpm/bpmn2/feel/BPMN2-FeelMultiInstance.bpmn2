@@ -1,0 +1,60 @@
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<definitions id="Definition" targetNamespace="" typeLanguage="http://www.java.com/javaTypes"
+             expressionLanguage="http://www.omg.org/spec/DMN/20180521/FEEL/"
+             xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:tns="http://www.jboss.org/drools">
+
+  <itemDefinition id="_listItem" structureRef="java.util.List" />
+  <itemDefinition id="_itemType" structureRef="String" />
+
+  <process processType="Private" isExecutable="true" id="FeelMultiInstance" name="process" tns:packageName="org.jbpm.bpmn2.feel">
+    <property id="list" itemSubjectRef="_listItem"/>
+    <property id="seen" itemSubjectRef="_listItem"/>
+
+    <startEvent id="start" />
+    <sequenceFlow id="start-task" sourceRef="start" targetRef="task" />
+
+    <userTask id="task" name="Hello" tns:taskName="Human Task">
+      <ioSpecification>
+        <dataInput id="task_input" name="MultiInstanceInput" />
+        <dataInput id="task_item" name="Item" />
+        <inputSet>
+          <dataInputRefs>task_item</dataInputRefs>
+        </inputSet>
+        <outputSet />
+      </ioSpecification>
+      <dataInputAssociation>
+        <sourceRef>list</sourceRef>
+        <targetRef>task_input</targetRef>
+      </dataInputAssociation>
+      <multiInstanceLoopCharacteristics>
+        <loopDataInputRef>task_input</loopDataInputRef>
+        <inputDataItem id="item" itemSubjectRef="_itemType"/>
+        <!-- no language of its own: follows the document default, FEEL.
+             "count(...)" is a FEEL built-in that MVEL has no equivalent for. -->
+        <completionCondition xsi:type="tFormalExpression"><![CDATA[count(list) = 2]]></completionCondition>
+      </multiInstanceLoopCharacteristics>
+    </userTask>
+    <sequenceFlow id="task-end" sourceRef="task" targetRef="end" />
+    <endEvent id="end" />
+  </process>
+</definitions>

@@ -20,8 +20,21 @@ package org.jbpm.process.instance.impl;
 
 import java.util.function.Function;
 
+import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
+
 public interface AssignmentAction {
 
     void execute(Function<String, Object> sourceResolver, Function<String, Object> targetResolver, AssignmentProducer producer) throws Exception;
+
+    /**
+     * Same, with the process context of the node the assignment belongs to.
+     *
+     * Only assignments that evaluate an expression in a language needing the whole variable scope, rather than a
+     * resolver function, care about the context; everything else keeps the plain form.
+     */
+    default void execute(KogitoProcessContext context, Function<String, Object> sourceResolver, Function<String, Object> targetResolver, AssignmentProducer producer)
+            throws Exception {
+        execute(sourceResolver, targetResolver, producer);
+    }
 
 }

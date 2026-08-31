@@ -26,6 +26,7 @@ import org.jbpm.compiler.xml.Parser;
 import org.jbpm.compiler.xml.ProcessBuildData;
 import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.node.DynamicNode;
 import org.w3c.dom.Element;
@@ -66,7 +67,8 @@ public class AdHocSubProcessHandler extends CompositeContextNodeHandler {
             dynamicNode.setCancelRemainingInstances(false);
         }
 
-        dynamicNode.setLanguage("http://www.java.com/java");
+        // the default a condition keeps when it declares no language of its own
+        dynamicNode.setLanguage(DefinitionsHandler.isFeelDocument(parser) ? ExpressionLanguages.FEEL : ExpressionLanguages.JAVA_LANGUAGE);
 
         // by default it should not autocomplete as it's adhoc
         org.w3c.dom.Node xmlNode = element.getFirstChild();
@@ -94,8 +96,8 @@ public class AdHocSubProcessHandler extends CompositeContextNodeHandler {
         ProcessHandler.linkConnections(process, dynamicNode, connections);
         ProcessHandler.linkBoundaryEvents(dynamicNode);
 
-        handleScript(dynamicNode, element, "onEntry");
-        handleScript(dynamicNode, element, "onExit");
+        handleScript(parser, dynamicNode, element, "onEntry");
+        handleScript(parser, dynamicNode, element, "onExit");
         return node;
     }
 

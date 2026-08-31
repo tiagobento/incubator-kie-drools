@@ -21,12 +21,15 @@ package org.jbpm.workflow.core.impl;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 
 import org.jbpm.process.instance.impl.AssignmentAction;
 import org.jbpm.process.instance.impl.AssignmentProducer;
+import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.jbpm.util.PatternConstants;
-import org.jbpm.workflow.instance.impl.MVELProcessHelper;
+import org.jbpm.workflow.instance.impl.InterpolationEvaluator;
+import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
 import org.mvel2.integration.VariableResolver;
 import org.mvel2.integration.impl.ImmutableDefaultFactory;
 import org.mvel2.integration.impl.SimpleValueResolver;
@@ -35,14 +38,26 @@ public class InputExpressionAssignment implements AssignmentAction {
 
     private DataDefinition from;
     private DataDefinition to;
+    private String dialect;
 
     public InputExpressionAssignment(DataDefinition from, DataDefinition to) {
+        this(from, to, null);
+    }
+
+    public InputExpressionAssignment(DataDefinition from, DataDefinition to, String dialect) {
         this.from = from;
         this.to = to;
+        this.dialect = dialect;
     }
 
     @Override
     public void execute(Function<String, Object> sourceResolver, Function<String, Object> targetResolver, AssignmentProducer producer) throws Exception {
+        execute(null, sourceResolver, targetResolver, producer);
+    }
+
+    @Override
+    public void execute(KogitoProcessContext context, Function<String, Object> sourceResolver, Function<String, Object> targetResolver, AssignmentProducer producer)
+            throws Exception {
         // producer in this case is void
         ImmutableDefaultFactory immutableDefaultFactory = new ImmutableDefaultFactory() {
 
@@ -57,18 +72,19 @@ public class InputExpressionAssignment implements AssignmentAction {
             }
 
         };
-        producer.accept(to.getLabel(), evalInput(immutableDefaultFactory, from.getExpression()));
+        producer.accept(to.getLabel(), evalInput(context, immutableDefaultFactory, from.getExpression()));
     }
 
-    private Object evalInput(ImmutableDefaultFactory factory, String expression) {
+    private Object evalInput(KogitoProcessContext context, ImmutableDefaultFactory factory, String expression) {
         String outcome = expression;
         Matcher matcher = PatternConstants.PARAMETER_MATCHER.matcher(expression);
         Map<String, Object> values = new HashMap<>();
+        Supplier<Map<String, Object>> feelScope = () -> context == null ? Map.of() : BpmnFeelVariables.forInterpolation(context);
         if (matcher.find()) {
             matcher.reset();
             while (matcher.find()) {
                 String paramName = matcher.group(1);
-                Object value = MVELProcessHelper.evaluator().eval(paramName, factory);
+                Object value = InterpolationEvaluator.evaluate(dialect, paramName, () -> factory, feelScope);
                 if (value != null) {
                     values.put(paramName, value);
                 }

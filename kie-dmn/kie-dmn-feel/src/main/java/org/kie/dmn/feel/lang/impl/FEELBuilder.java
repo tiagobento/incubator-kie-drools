@@ -42,6 +42,7 @@ public class FEELBuilder {
         private List<FEELProfile> profiles;
         private FEELDialect feelDialect;
         private DMNVersion dmnVersion;
+        private boolean externalFunctionsDisabled;
 
         private Builder() {
         }
@@ -66,12 +67,24 @@ public class FEELBuilder {
             return this;
         }
 
+        /**
+         * Makes the built engine refuse, at compile time, any expression declaring an <code>external</code> function.
+         *
+         * External functions reflectively invoke an arbitrary class, so hosts evaluating expressions that come from
+         * outside the application need to turn them off. Disabling is opt-in: by default they remain enabled, which is
+         * the behaviour DMN relies on.
+         */
+        public Builder withExternalFunctionsDisabled() {
+            this.externalFunctionsDisabled = true;
+            return this;
+        }
+
         public FEEL build() {
             ClassLoader classLoaderToUse = classLoader != null ? classLoader : ClassLoaderUtil.findDefaultClassLoader();
             List<FEELProfile> profilesToUse = profiles != null ? profiles : Collections.emptyList();
             FEELDialect feelDialectToUse = feelDialect != null ? feelDialect : FEELDialect.FEEL;
             DMNVersion dmnVersionToUse = dmnVersion != null  ? dmnVersion : DMNVersion.getLatest();
-            return new FEELImpl(classLoaderToUse, profilesToUse, feelDialectToUse, dmnVersionToUse);
+            return new FEELImpl(classLoaderToUse, profilesToUse, feelDialectToUse, dmnVersionToUse, externalFunctionsDisabled);
         }
     }
 }

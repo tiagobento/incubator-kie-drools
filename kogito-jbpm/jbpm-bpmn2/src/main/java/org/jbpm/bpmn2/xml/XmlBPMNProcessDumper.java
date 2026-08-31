@@ -50,6 +50,7 @@ import org.jbpm.process.core.event.EventTypeFilter;
 import org.jbpm.process.core.impl.ProcessImpl;
 import org.jbpm.process.core.impl.XmlProcessDumper;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Constraint;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.impl.ConnectionImpl;
@@ -77,13 +78,13 @@ import org.slf4j.LoggerFactory;
 
 public class XmlBPMNProcessDumper implements XmlProcessDumper {
 
-    public static final String JAVA_LANGUAGE = "http://www.java.com/java";
-    public static final String MVEL_LANGUAGE = "http://www.mvel.org/2.0";
-    public static final String RULE_LANGUAGE = "http://www.jboss.org/drools/rule";
-    public static final String XPATH_LANGUAGE = "http://www.w3.org/1999/XPath";
-    public static final String FEEL_LANGUAGE = "http://www.omg.org/spec/FEEL/20140401";
-    public static final String DMN_FEEL_LANGUAGE = "http://www.omg.org/spec/DMN/20180521/FEEL/";
-    public static final String FEEL_LANGUAGE_SHORT = "application/feel";
+    public static final String JAVA_LANGUAGE = ExpressionLanguages.JAVA_LANGUAGE;
+    public static final String MVEL_LANGUAGE = ExpressionLanguages.MVEL_LANGUAGE;
+    public static final String RULE_LANGUAGE = ExpressionLanguages.RULE_LANGUAGE;
+    public static final String XPATH_LANGUAGE = ExpressionLanguages.XPATH_LANGUAGE;
+    public static final String FEEL_LANGUAGE = ExpressionLanguages.FEEL_LANGUAGE;
+    public static final String DMN_FEEL_LANGUAGE = ExpressionLanguages.DMN_FEEL_LANGUAGE;
+    public static final String FEEL_LANGUAGE_SHORT = ExpressionLanguages.FEEL_LANGUAGE_SHORT;
 
     public static final int NO_META_DATA = 0;
     public static final int META_DATA_AS_NODE_PROPERTY = 1;
@@ -126,6 +127,13 @@ public class XmlBPMNProcessDumper implements XmlProcessDumper {
 
     private Set<String> visitedVariables;
 
+    private static String expressionLanguage(WorkflowProcess process) {
+        String language = process instanceof org.jbpm.workflow.core.WorkflowProcess
+                ? ((org.jbpm.workflow.core.WorkflowProcess) process).getExpressionLanguage()
+                : null;
+        return ExpressionLanguages.isFeel(language) ? DMN_FEEL_LANGUAGE : MVEL_LANGUAGE;
+    }
+
     protected void visitProcess(WorkflowProcess process, StringBuilder xmlDump, int metaDataType) {
         String targetNamespace = (String) process.getMetaData().get("TargetNamespace");
         if (targetNamespace == null) {
@@ -136,7 +144,7 @@ public class XmlBPMNProcessDumper implements XmlProcessDumper {
                         "<definitions id=\"Definition\"" + EOL +
                         "             targetNamespace=\"" + targetNamespace + "\"" + EOL +
                         "             typeLanguage=\"http://www.java.com/javaTypes\"" + EOL +
-                        "             expressionLanguage=\"http://www.mvel.org/2.0\"" + EOL +
+                        "             expressionLanguage=\"" + expressionLanguage(process) + "\"" + EOL +
                         "             xmlns=\"http://www.omg.org/spec/BPMN/20100524/MODEL\"" + EOL +
                         "             xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"" + EOL +
                         "             xsi:schemaLocation=\"http://www.omg.org/spec/BPMN/20100524/MODEL BPMN20.xsd\"" + EOL +

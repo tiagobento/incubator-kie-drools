@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.node.Assignment;
 import org.jbpm.workflow.core.node.Transformation;
 
@@ -64,18 +65,26 @@ public class DataAssociation implements Serializable {
     }
 
     private Assignment buildInterpretedAssignment(Assignment assignment) {
-        if (assignment.getDialect() != null) {
-            if (assignment.getDialect().toLowerCase().equals("xpath")) {
+        String dialect = assignment.getDialect();
+        boolean feel = ExpressionLanguages.isFeel(dialect);
+        if (dialect != null && !feel) {
+            if (dialect.toLowerCase().equals("xpath")) {
                 assignment.setMetaData("Action", new XPATHAssignmentAction(assignment, sources, target));
-                return assignment;
-            } else {
-                return assignment;
             }
+            // any other dialect is a user-registered one, resolved through the ProcessDialectRegistry
+            return assignment;
         }
+        // FEEL takes the same routing as everything else: the heuristics below decide what kind of assignment this
+        // is, and only the two kinds that involve a #{...} have a FEEL counterpart. A constant or a plain copy is the
+        // same action whatever the language.
         if (isExpr(assignment.getFrom().getExpression())) {
-            assignment.setMetaData("Action", new InputExpressionAssignment(assignment.getFrom(), assignment.getTo()));
+            assignment.setMetaData("Action", new InputExpressionAssignment(assignment.getFrom(), assignment.getTo(), dialect));
         } else if (isExpr(assignment.getTo().getExpression())) {
-            assignment.setMetaData("Action", new OutputExpressionAssignment(assignment.getFrom(), assignment.getTo()));
+            // a target names a place rather than computing a value, so FEEL having no assignment does not matter:
+            // the path is walked and the value written into what its last step names
+            assignment.setMetaData("Action", feel
+                    ? new FeelOutputExpressionAssignment(assignment.getFrom(), assignment.getTo())
+                    : new OutputExpressionAssignment(assignment.getFrom(), assignment.getTo()));
         } else if (assignment.getFrom().hasExpression()) {
             // constants can only be in the source of the expression
             String source = assignment.getFrom().getExpression();

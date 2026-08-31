@@ -23,6 +23,7 @@ import java.util.Map;
 
 import org.drools.mvel.java.JavaDialect;
 import org.jbpm.compiler.xml.Parser;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.impl.DroolsConsequenceAction;
 import org.jbpm.workflow.core.node.ActionNode;
@@ -66,7 +67,7 @@ public class ScriptTaskHandler extends AbstractNodeHandler {
             actionNode.setAction(action);
         }
         String language = element.getAttribute("scriptFormat");
-        action.setDialect(SUPPORTED_SCRIPT_FORMATS.getOrDefault(language, "java"));
+        action.setDialect(scriptDialect(parser, language));
         action.setConsequence("");
         final DroolsConsequenceAction scriptAction = action;
         readSingleChildElementByTag(element, "script").ifPresent(script -> {
@@ -88,6 +89,20 @@ public class ScriptTaskHandler extends AbstractNodeHandler {
         actionNode.setIoSpecification(readIOEspecification(parser, element));
         actionNode.setMultiInstanceSpecification(readMultiInstanceSpecification(parser, element, actionNode.getIoSpecification()));
         return currentNode;
+    }
+
+    /**
+     * A script task with no scriptFormat of its own follows the document language, so a FEEL document does not need to
+     * repeat the language on every script. Anything else keeps defaulting to Java, as it always has.
+     */
+    private static String scriptDialect(Parser parser, String scriptFormat) {
+        if (scriptFormat != null && !scriptFormat.isEmpty()) {
+            // every spelling of FEEL, including the DMN URI a document declares, not only the two registered below
+            return ExpressionLanguages.isFeel(scriptFormat)
+                    ? ExpressionLanguages.FEEL
+                    : SUPPORTED_SCRIPT_FORMATS.getOrDefault(scriptFormat, "java");
+        }
+        return DefinitionsHandler.isFeelDocument(parser) ? ExpressionLanguages.FEEL : "java";
     }
 
     public void writeNode(Node node, StringBuilder xmlDump, int metaDataType) {

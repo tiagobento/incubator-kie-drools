@@ -23,15 +23,19 @@ import java.util.List;
 import org.antlr.v4.runtime.tree.ParseTree;
 import org.kie.dmn.api.feel.runtime.events.FEELEvent;
 import org.kie.dmn.api.feel.runtime.events.FEELEventListener;
+import org.kie.dmn.feel.exceptions.ExternalFunctionsDisabledException;
 import org.kie.dmn.feel.lang.CompilerContext;
 import org.kie.dmn.feel.lang.EvaluationContext;
 import org.kie.dmn.feel.lang.FEELProfile;
 import org.kie.dmn.feel.lang.ast.visitor.ASTHeuristicCheckerVisitor;
 import org.kie.dmn.feel.lang.ast.visitor.ASTTemporalConstantVisitor;
+import org.kie.dmn.feel.lang.ast.visitor.NoExternalFunctionsVisitor;
 import org.kie.dmn.feel.lang.impl.CompiledExecutableExpression;
 import org.kie.dmn.feel.lang.impl.CompiledExpressionImpl;
 import org.kie.dmn.feel.lang.impl.InterpretedExecutableExpression;
 import org.kie.dmn.feel.parser.feel11.ASTBuilderVisitor;
+import org.kie.dmn.feel.runtime.events.ASTEventBase;
+import org.kie.dmn.feel.util.Msg;
 
 import static org.kie.dmn.feel.codegen.feel11.ProcessedFEELUnit.DefaultMode.Compiled;
 import static org.kie.dmn.feel.util.ClassLoaderUtil.CAN_PLATFORM_CLASSLOAD;
@@ -50,6 +54,19 @@ public class ProcessedExpression extends ProcessedFEELUnit {
             CompilerContext ctx,
             ProcessedFEELUnit.DefaultMode executionMode,
             List<FEELProfile> profiles) {
+        this(expression, ctx, executionMode, profiles, false);
+    }
+
+    /**
+     * @param externalFunctionsDisabled refuse an expression declaring an <code>external</code> function, which
+     *        reflectively invokes an arbitrary class. See {@code FEELBuilder.withExternalFunctionsDisabled()}.
+     */
+    public ProcessedExpression(
+            String expression,
+            CompilerContext ctx,
+            ProcessedFEELUnit.DefaultMode executionMode,
+            List<FEELProfile> profiles,
+            boolean externalFunctionsDisabled) {
         super(expression, ctx, profiles, TEMPLATE_RESOURCE, TEMPLATE_CLASS);
         this.executionMode = executionMode;
         ParseTree tree = getFEELParser(expression, ctx, profiles).compilation_unit();
@@ -66,6 +83,14 @@ public class ProcessedExpression extends ProcessedFEELUnit {
         }
         if (astVisitor.isVisitedTemporalCandidate()) {
             ast.accept(new ASTTemporalConstantVisitor(ctx));
+        }
+        if (externalFunctionsDisabled && Boolean.TRUE.equals(ast.accept(new NoExternalFunctionsVisitor()))) {
+            String message = Msg.createMessage(Msg.EXTERNAL_FUNCTIONS_DISABLED, expression);
+            FEELEvent event = new ASTEventBase(FEELEvent.Severity.ERROR, message, ast);
+            for (FEELEventListener listener : ctx.getListeners()) {
+                listener.onEvent(event);
+            }
+            throw new ExternalFunctionsDisabledException(message);
         }
     }
 

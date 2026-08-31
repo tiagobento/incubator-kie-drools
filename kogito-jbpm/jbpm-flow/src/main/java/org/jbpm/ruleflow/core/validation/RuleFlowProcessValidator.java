@@ -44,6 +44,7 @@ import org.jbpm.process.core.validation.ProcessValidator;
 import org.jbpm.process.core.validation.impl.ProcessValidationErrorImpl;
 import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Constraint;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.WorkflowProcess;
@@ -81,7 +82,6 @@ import org.kie.api.definition.process.NodeContainer;
 import org.kie.api.definition.process.Process;
 import org.kie.api.io.Resource;
 import org.kie.kogito.internal.process.runtime.KogitoWorkflowProcess;
-import org.kie.kogito.process.expr.ExpressionHandlerFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -416,7 +416,7 @@ public class RuleFlowProcessValidator implements ProcessValidator {
                                 errors,
                                 "Action has empty action.");
                     }
-                    if (!"java".equals(droolsAction.getDialect())) {
+                    if (!"java".equals(droolsAction.getDialect()) && !ExpressionLanguages.isFeel(droolsAction.getDialect())) {
                         addErrorMessage(process,
                                 node,
                                 errors,
@@ -862,11 +862,6 @@ public class RuleFlowProcessValidator implements ProcessValidator {
                 (nodeContainer instanceof WorkflowProcess && ((WorkflowProcess) nodeContainer).isDynamic());
     }
 
-    private boolean isExpression(RuleFlowProcess process, String expression) {
-        String lang = process.getExpressionLanguage();
-        return lang != null && ExpressionHandlerFactory.get(lang, expression).isValid();
-    }
-
     private void validateTimer(final Timer timer,
             final org.kie.api.definition.process.Node node,
             final RuleFlowProcess process,
@@ -896,12 +891,10 @@ public class RuleFlowProcessValidator implements ProcessValidator {
                             break;
                     }
                 } catch (RuntimeException e) {
-                    if (!isExpression(process, timer.getDelay())) {
-                        addErrorMessage(process,
-                                node,
-                                errors,
-                                "Could not parse delay '" + timer.getDelay() + "': " + e.getMessage());
-                    }
+                    addErrorMessage(process,
+                            node,
+                            errors,
+                            "Could not parse delay '" + timer.getDelay() + "': " + e.getMessage());
                 }
             }
         }
@@ -912,12 +905,10 @@ public class RuleFlowProcessValidator implements ProcessValidator {
                     DateTimeUtils.parseRepeatableDateTime(timer.getPeriod());
                 }
             } catch (RuntimeException e) {
-                if (!isExpression(process, timer.getPeriod())) {
-                    addErrorMessage(process,
-                            node,
-                            errors,
-                            "Could not parse period '" + timer.getPeriod() + "': " + e.getMessage());
-                }
+                addErrorMessage(process,
+                        node,
+                        errors,
+                        "Could not parse period '" + timer.getPeriod() + "': " + e.getMessage());
             }
         }
 
@@ -925,12 +916,10 @@ public class RuleFlowProcessValidator implements ProcessValidator {
             try {
                 DateTimeUtils.parseDateAsDuration(timer.getDate());
             } catch (RuntimeException e) {
-                if (!isExpression(process, timer.getDate())) {
-                    addErrorMessage(process,
-                            node,
-                            errors,
-                            "Could not parse date '" + timer.getDate() + "': " + e.getMessage());
-                }
+                addErrorMessage(process,
+                        node,
+                        errors,
+                        "Could not parse date '" + timer.getDate() + "': " + e.getMessage());
             }
         }
     }

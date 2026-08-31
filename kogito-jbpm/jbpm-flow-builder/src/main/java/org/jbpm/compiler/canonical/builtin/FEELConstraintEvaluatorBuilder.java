@@ -24,6 +24,7 @@ import org.kie.kogito.internal.utils.ConversionUtils;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.NodeList;
+import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
@@ -37,9 +38,11 @@ public class FEELConstraintEvaluatorBuilder implements ReturnValueEvaluatorBuild
 
     @Override
     public Expression build(ContextResolver resolver, String expresssion, Class<?> type, String rootName) {
+        // the caller says what the expression is for: only a condition is held to a boolean result
         return new ObjectCreationExpr(null,
                 StaticJavaParser.parseClassOrInterfaceType(FeelReturnValueEvaluator.class.getName()),
-                new NodeList<>(new StringLiteralExpr(ConversionUtils.sanitizeString(expresssion))));
+                new NodeList<>(new StringLiteralExpr(ConversionUtils.sanitizeString(expresssion)),
+                        new ClassExpr(StaticJavaParser.parseClassOrInterfaceType(type.getName()))));
     }
 
 }

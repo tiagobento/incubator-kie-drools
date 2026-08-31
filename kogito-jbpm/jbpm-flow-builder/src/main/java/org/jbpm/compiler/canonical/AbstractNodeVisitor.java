@@ -169,7 +169,9 @@ public abstract class AbstractNodeVisitor<T extends Node> extends AbstractVisito
                 } else {
                     returnValueEvaluator = returnValueEvaluatorBuilderService.build(node,
                             constraint.getDialect(),
-                            constraint.getConstraint());
+                            constraint.getConstraint(),
+                            Boolean.class,
+                            null);
                 }
                 body.addStatement(getFactoryMethod(getNodeId(currentNode), METHOD_CONSTRAINT,
                         getWorkflowElementConstructor(entry.getKey().getNodeId()),

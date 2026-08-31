@@ -31,6 +31,7 @@ import org.jbpm.compiler.xml.Parser;
 import org.jbpm.compiler.xml.core.BaseAbstractHandler;
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.NodeContainer;
 import org.jbpm.workflow.core.node.CompositeNode;
@@ -142,6 +143,10 @@ public class SequenceFlowHandler extends BaseAbstractHandler implements Handler 
                     } else {
                         throw new ProcessParsingValidationException("Unknown language " + language);
                     }
+                } else if (DefinitionsHandler.isFeelDocument(parser)) {
+                    // no language of its own: follow the document default. Otherwise the constraint keeps the MVEL
+                    // default it has always had.
+                    sequenceFlow.setLanguage(ExpressionLanguages.FEEL);
                 }
                 sequenceFlow.setExpression(expression);
             }

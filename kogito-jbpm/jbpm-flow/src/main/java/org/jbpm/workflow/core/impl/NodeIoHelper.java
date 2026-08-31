@@ -85,7 +85,7 @@ public class NodeIoHelper {
                 Transformation transformation = mapping.getTransformation();
                 Object parameterValue = null;
                 if (transformation != null) {
-                    parameterValue = transformation.getCompiledExpression().eval(var -> dataSet.get(var));
+                    parameterValue = transformation.getCompiledExpression().eval(dataSet);
                 }
                 if (parameterValue != null) {
                     producer.accept(mapping.getTarget().getLabel(), parameterValue);
@@ -111,7 +111,7 @@ public class NodeIoHelper {
         try {
             KogitoProcessContextImpl context = nodeInstance != null ? new KogitoProcessContextImpl(nodeInstance.getProcessInstance().getKnowledgeRuntime()) : new KogitoProcessContextImpl(null);
             context.setNodeInstance(nodeInstance);
-            action.execute(sourceResolver, targetResolver, producer);
+            action.execute(context, sourceResolver, targetResolver, producer);
         } catch (Exception e) {
             throw new RuntimeException("Unable to execute Assignment", e);
         }

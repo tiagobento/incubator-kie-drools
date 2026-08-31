@@ -28,11 +28,8 @@ import org.jbpm.process.core.timer.DateTimeUtils;
 import org.jbpm.process.core.timer.Timer;
 import org.jbpm.process.instance.InternalProcessRuntime;
 import org.jbpm.process.instance.impl.Action;
-import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.util.ContextFactory;
 import org.jbpm.workflow.core.DroolsAction;
-import org.jbpm.workflow.core.WorkflowProcess;
-import org.jbpm.workflow.core.impl.NodeImpl;
 import org.jbpm.workflow.core.node.StateBasedNode;
 import org.jbpm.workflow.instance.impl.ExtendedNodeInstanceImpl;
 import org.jbpm.workflow.instance.impl.WorkflowProcessInstanceImpl;
@@ -46,8 +43,6 @@ import org.kie.kogito.internal.process.runtime.KogitoProcessInstance;
 import org.kie.kogito.internal.process.runtime.KogitoProcessRuntime;
 import org.kie.kogito.jobs.*;
 import org.kie.kogito.jobs.descriptors.ProcessInstanceJobDescription;
-import org.kie.kogito.process.expr.Expression;
-import org.kie.kogito.process.expr.ExpressionHandlerFactory;
 import org.kie.kogito.timer.TimerInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,8 +63,6 @@ public abstract class StateBasedNodeInstance extends ExtendedNodeInstanceImpl im
     private List<String> timerInstances;
 
     private Map<String, String> timerInstancesReference;
-
-    private transient KogitoProcessContext context;
 
     public StateBasedNode getEventBasedNode() {
         return (StateBasedNode) getNode();
@@ -149,8 +142,8 @@ public abstract class StateBasedNodeInstance extends ExtendedNodeInstanceImpl im
             switch (timer.getTimeType()) {
                 case Timer.TIME_CYCLE:
 
-                    String tempDelay = resolveTimerExpression(timer.getDelay());
-                    String tempPeriod = resolveTimerExpression(timer.getPeriod());
+                    String tempDelay = resolveExpression(timer.getDelay());
+                    String tempPeriod = resolveExpression(timer.getPeriod());
                     if (DateTimeUtils.isCronExpression(tempDelay)) {
                         long[] cronValues = DateTimeUtils.parseCronAsRepeatableInterval(tempDelay);
                         return DurationExpirationTime.repeat(cronValues[1], cronValues[2], (int) cronValues[0]);
@@ -183,7 +176,7 @@ public abstract class StateBasedNodeInstance extends ExtendedNodeInstanceImpl im
                     }
 
                 case Timer.TIME_DURATION:
-                    delay = resolveTimerExpression(timer.getDelay());
+                    delay = resolveExpression(timer.getDelay());
 
                     return DurationExpirationTime.after(businessCalendar.calculateBusinessTimeAsDuration(delay));
                 case Timer.TIME_DATE:
@@ -205,14 +198,14 @@ public abstract class StateBasedNodeInstance extends ExtendedNodeInstanceImpl im
             case Timer.TIME_CYCLE:
                 if (timer.getPeriod() != null) {
 
-                    long actualDelay = DateTimeUtils.parseDuration(resolveTimerExpression(timer.getDelay()));
+                    long actualDelay = DateTimeUtils.parseDuration(resolveExpression(timer.getDelay()));
                     if (timer.getPeriod() == null) {
                         return DurationExpirationTime.repeat(actualDelay, actualDelay, Integer.MAX_VALUE);
                     } else {
-                        return DurationExpirationTime.repeat(actualDelay, DateTimeUtils.parseDuration(resolveTimerExpression(timer.getPeriod())), Integer.MAX_VALUE);
+                        return DurationExpirationTime.repeat(actualDelay, DateTimeUtils.parseDuration(resolveExpression(timer.getPeriod())), Integer.MAX_VALUE);
                     }
                 } else {
-                    String resolvedDelay = resolveTimerExpression(timer.getDelay());
+                    String resolvedDelay = resolveExpression(timer.getDelay());
                     // when using ISO date/time period is not set
                     long[] repeatValues = null;
                     if (DateTimeUtils.isCronExpression(resolvedDelay)) {
@@ -244,7 +237,7 @@ public abstract class StateBasedNodeInstance extends ExtendedNodeInstanceImpl im
                     duration = DateTimeUtils.parseDuration(timer.getDelay());
                 } catch (RuntimeException e) {
                     // cannot parse delay, trying to interpret it
-                    s = resolveTimerExpression(timer.getDelay());
+                    s = resolveExpression(timer.getDelay());
                     duration = DateTimeUtils.parseDuration(s);
                 }
                 return DurationExpirationTime.after(duration);
@@ -254,30 +247,11 @@ public abstract class StateBasedNodeInstance extends ExtendedNodeInstanceImpl im
                     return ExactExpirationTime.of(timer.getDate());
                 } catch (RuntimeException e) {
                     // cannot parse delay, trying to interpret it
-                    s = resolveTimerExpression(timer.getDate());
+                    s = resolveExpression(timer.getDate());
                     return ExactExpirationTime.of(s);
                 }
         }
         throw new UnsupportedOperationException("Not supported timer definition");
-    }
-
-    private String resolveTimerExpression(String expression) {
-        if (!isExpression(expression)) {
-            WorkflowProcess process = ((NodeImpl) getNode()).getProcess();
-            String lang = process.getExpressionLanguage();
-            if (lang != null) {
-                Expression exprObject = ExpressionHandlerFactory.get(lang, expression);
-                if (exprObject.isValid()) {
-                    if (context == null) {
-                        context = ContextFactory.fromNode(this);
-                    }
-                    String varName = (String) process.getMetaData().get(Metadata.VARIABLE);
-                    Object target = varName == null ? this.getProcessInstance().getVariables() : context.getVariable(varName);
-                    return exprObject.eval(target, String.class, context);
-                }
-            }
-        }
-        return resolveExpression(expression);
     }
 
     protected void handleSLAViolation() {

@@ -1,0 +1,61 @@
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:drools="http://www.jboss.org/drools"
+                   id="_FeelScriptTask"
+                   expressionLanguage="http://www.omg.org/spec/DMN/20180521/FEEL/"
+                   targetNamespace="http://www.omg.org/bpmn20">
+  <bpmn2:itemDefinition id="_xItem" structureRef="Integer"/>
+  <bpmn2:itemDefinition id="_yItem" structureRef="Integer"/>
+  <bpmn2:itemDefinition id="_totalItem" structureRef="Object"/>
+  <bpmn2:itemDefinition id="_tierItem" structureRef="String"/>
+  <bpmn2:process id="FeelScriptTask" drools:packageName="org.jbpm.bpmn2.feel" drools:version="1.0" name="BPMN2-FeelScriptTask" isExecutable="true" processType="Public">
+    <bpmn2:property id="x" itemSubjectRef="_xItem" name="x"/>
+    <bpmn2:property id="y" itemSubjectRef="_yItem" name="y"/>
+    <bpmn2:property id="total" itemSubjectRef="_totalItem" name="total"/>
+    <bpmn2:property id="tier" itemSubjectRef="_tierItem" name="tier"/>
+
+    <bpmn2:startEvent id="start">
+      <bpmn2:outgoing>start-sum</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:sequenceFlow id="start-sum" sourceRef="start" targetRef="sum"/>
+
+    <!-- an explicit scriptFormat, spelled with the DMN FEEL URI -->
+    <bpmn2:scriptTask id="sum" name="Sum" scriptFormat="http://www.omg.org/spec/DMN/20180521/FEEL/">
+      <bpmn2:incoming>start-sum</bpmn2:incoming>
+      <bpmn2:outgoing>sum-classify</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[{ total: x + y }]]></bpmn2:script>
+    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="sum-classify" sourceRef="sum" targetRef="classify"/>
+
+    <!-- no scriptFormat: follows the document expressionLanguage -->
+    <bpmn2:scriptTask id="classify" name="Classify">
+      <bpmn2:incoming>sum-classify</bpmn2:incoming>
+      <bpmn2:outgoing>classify-end</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[{ tier: if total > 100 then "gold" else "standard" }]]></bpmn2:script>
+    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="classify-end" sourceRef="classify" targetRef="end"/>
+
+    <bpmn2:endEvent id="end">
+      <bpmn2:incoming>classify-end</bpmn2:incoming>
+    </bpmn2:endEvent>
+  </bpmn2:process>
+</bpmn2:definitions>

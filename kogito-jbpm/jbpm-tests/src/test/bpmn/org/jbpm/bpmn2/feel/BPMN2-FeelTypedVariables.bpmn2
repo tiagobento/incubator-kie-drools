@@ -1,0 +1,45 @@
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<definitions id="Definition" targetNamespace="" typeLanguage="http://www.java.com/javaTypes"
+             expressionLanguage="http://www.omg.org/spec/DMN/20180521/FEEL/"
+             xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:tns="http://www.jboss.org/drools">
+
+  <itemDefinition id="_intItem" structureRef="Integer" />
+  <itemDefinition id="_dateItem" structureRef="java.util.Date" />
+  <itemDefinition id="_strItem" structureRef="String" />
+
+  <process processType="Private" isExecutable="true" id="FeelTypedVariables" name="types" tns:packageName="org.jbpm.bpmn2.feel">
+    <property id="x" itemSubjectRef="_intItem"/>
+    <property id="total" itemSubjectRef="_intItem"/>
+    <property id="when" itemSubjectRef="_dateItem"/>
+    <property id="later" itemSubjectRef="_dateItem"/>
+    <property id="year" itemSubjectRef="_intItem"/>
+
+    <startEvent id="start" />
+    <sequenceFlow id="start-task" sourceRef="start" targetRef="task" />
+    <scriptTask id="task" name="Task" scriptFormat="application/feel">
+      <script><![CDATA[{ total: x + 1, year: when.year, later: when + duration("P1D") }]]></script>
+    </scriptTask>
+    <sequenceFlow id="task-end" sourceRef="task" targetRef="end" />
+    <endEvent id="end" />
+  </process>
+</definitions>

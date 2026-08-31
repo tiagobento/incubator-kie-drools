@@ -118,7 +118,7 @@ public class ForEachNodeVisitor extends AbstractCompositeNodeVisitor<ForEachNode
             String completionConditionDialect = node.getCompletionConditionExpression().dialect();
             String completionConditionExpression = node.getCompletionConditionExpression().expression();
             body.addStatement(getFactoryMethod(getNodeId(node), ForEachNodeFactory.METHOD_COMPLETE_CONDITION,
-                    getReturnValueEvaluatorBuilderService().build(node, completionConditionDialect, completionConditionExpression)));
+                    getReturnValueEvaluatorBuilderService().build(node, completionConditionDialect, completionConditionExpression, Boolean.class, null)));
         }
         visitConnections(getNodeId(node), filterNodes.toArray(new Node[filterNodes.size()]), body);
 

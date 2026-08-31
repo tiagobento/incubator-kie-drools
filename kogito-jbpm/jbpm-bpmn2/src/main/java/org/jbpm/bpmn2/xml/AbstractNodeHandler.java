@@ -49,10 +49,12 @@ import org.jbpm.process.core.ContextContainer;
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.process.core.datatype.DataTypeResolver;
+import org.jbpm.process.instance.impl.FeelReturnValueEvaluator;
 import org.jbpm.process.instance.impl.MVELInterpretedReturnValueEvaluator;
 import org.jbpm.process.instance.impl.ReturnValueEvaluator;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
 import org.jbpm.ruleflow.core.WorkflowElementIdentifierFactory;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.util.PatternConstants;
 import org.jbpm.workflow.core.DroolsAction;
 import org.jbpm.workflow.core.Node;
@@ -92,6 +94,12 @@ import static org.jbpm.ruleflow.core.Metadata.MAPPING_VARIABLE_INPUT;
 import static org.jbpm.ruleflow.core.Metadata.VARIABLE;
 
 public abstract class AbstractNodeHandler extends BaseAbstractHandler implements Handler {
+
+    /**
+     * A bare variable name, as opposed to an expression over one. Only the former can skip evaluation: stripping the
+     * <code>#{}</code> off anything else leaves a fragment that is then read as a constant.
+     */
+    private static final java.util.regex.Pattern VARIABLE_NAME = java.util.regex.Pattern.compile("[A-Za-z_$][A-Za-z0-9_$]*");
 
     protected static final Logger logger = LoggerFactory.getLogger(AbstractNodeHandler.class);
 
@@ -232,7 +240,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         xmlDump.append("    </" + name + ">" + EOL);
     }
 
-    protected void handleScript(final ExtendedNodeImpl node, final Element element, String type) {
+    protected void handleScript(final Parser parser, final ExtendedNodeImpl node, final Element element, String type) {
         NodeList nodeList = element.getChildNodes();
         for (int i = 0; i < nodeList.getLength(); i++) {
             if (nodeList.item(i) instanceof Element) {
@@ -248,7 +256,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
                                 actions = new ArrayList<>();
                                 node.setActions(type, actions);
                             }
-                            DroolsAction action = extractScript((Element) subXmlNode);
+                            DroolsAction action = extractScript((Element) subXmlNode, DefinitionsHandler.documentExpressionLanguage(parser));
                             actions.add(action);
                         }
                     }
@@ -258,9 +266,24 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
     }
 
     public static DroolsAction extractScript(Element xmlNode) {
-        String dialect = "mvel";
-        if ("http://www.java.com/java".equals(xmlNode.getAttribute("scriptFormat"))) {
+        return extractScript(xmlNode, null);
+    }
+
+    /**
+     * @param documentLanguage the language the document declared, applied when the script carries no scriptFormat
+     */
+    public static DroolsAction extractScript(Element xmlNode, String documentLanguage) {
+        String scriptFormat = xmlNode.getAttribute("scriptFormat");
+        String dialect;
+        if (ExpressionLanguages.JAVA_LANGUAGE.equals(scriptFormat)) {
             dialect = "java";
+        } else if (ExpressionLanguages.isFeel(scriptFormat)) {
+            dialect = ExpressionLanguages.FEEL;
+        } else if ((scriptFormat == null || scriptFormat.isEmpty()) && ExpressionLanguages.isFeel(documentLanguage)) {
+            dialect = ExpressionLanguages.FEEL;
+        } else {
+            // MVEL, as before: anything that is not Java or FEEL, including a script with no scriptFormat at all
+            dialect = ExpressionLanguages.MVEL;
         }
         NodeList subNodeList = xmlNode.getChildNodes();
         for (int j = 0; j < subNodeList.getLength(); j++) {
@@ -272,7 +295,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
                 }
             }
         }
-        return new DroolsConsequenceAction("mvel", "");
+        return new DroolsConsequenceAction(dialect, "");
     }
 
     protected void writeMetaData(final Node node, final StringBuilder xmlDump) {
@@ -427,7 +450,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         while (xmlNode != null) {
             String nodeName = xmlNode.getNodeName();
             if ("dataOutputAssociation".equals(nodeName)) {
-                readDataAssociation((Element) xmlNode, id -> ioSpec.getDataOutput().get(id), id -> getVariableDataSpec(parser, id)).ifPresent(e -> {
+                readDataAssociation(parser, (Element) xmlNode, id -> ioSpec.getDataOutput().get(id), id -> getVariableDataSpec(parser, id)).ifPresent(e -> {
                     e.setType(DataAssociationType.OUTPUT);
                     ioSpec.getDataOutputAssociation().add(e);
                 });
@@ -445,7 +468,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         while (xmlNode != null) {
             String nodeName = xmlNode.getNodeName();
             if ("dataInputAssociation".equals(nodeName)) {
-                readDataAssociation((Element) xmlNode, id -> getVariableDataSpec(parser, id), id -> ioSpec.getDataInput().get(id)).ifPresent(e -> {
+                readDataAssociation(parser, (Element) xmlNode, id -> getVariableDataSpec(parser, id), id -> ioSpec.getDataInput().get(id)).ifPresent(e -> {
                     e.setType(DataAssociationType.INPUT);
                     ioSpec.getDataInputAssociation().add(e);
                 });
@@ -465,12 +488,12 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
                 ioSpec.getDataInputs().addAll(readDataInput(parser, xmlNode));
                 ioSpec.getDataOutputs().addAll(readDataOutput(parser, xmlNode));
             } else if ("dataInputAssociation".equals(nodeName)) {
-                readDataAssociation((Element) xmlNode, id -> getVariableDataSpec(parser, id), id -> ioSpec.getDataInput().get(id)).ifPresent(e -> {
+                readDataAssociation(parser, (Element) xmlNode, id -> getVariableDataSpec(parser, id), id -> ioSpec.getDataInput().get(id)).ifPresent(e -> {
                     e.setType(DataAssociationType.INPUT);
                     ioSpec.getDataInputAssociation().add(e);
                 });
             } else if ("dataOutputAssociation".equals(nodeName)) {
-                readDataAssociation((Element) xmlNode, id -> ioSpec.getDataOutput().get(id), id -> getVariableDataSpec(parser, id)).ifPresent(e -> {
+                readDataAssociation(parser, (Element) xmlNode, id -> ioSpec.getDataOutput().get(id), id -> getVariableDataSpec(parser, id)).ifPresent(e -> {
                     e.setType(DataAssociationType.OUTPUT);
                     ioSpec.getDataOutputAssociation().add(e);
                 });
@@ -539,11 +562,11 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         return !elements.isEmpty() ? Optional.of(elements.get(0)) : Optional.empty();
     }
 
-    protected Optional<DataAssociation> readDataAssociation(Element element, Function<String, DataDefinition> sourceResolver,
+    protected Optional<DataAssociation> readDataAssociation(Parser parser, Element element, Function<String, DataDefinition> sourceResolver,
             Function<String, DataDefinition> targetResolver) {
         List<DataDefinition> sources = readSources(element, sourceResolver);
         DataDefinition target = readTarget(element, targetResolver);
-        List<Assignment> assignments = readAssignments(element,
+        List<Assignment> assignments = readAssignments(parser, element,
                 src -> {
                     if (".".equals(src)) {
                         return sources.get(0);
@@ -556,7 +579,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
                     }
                     return targetResolver.apply(dst);
                 });
-        Transformation transformation = readTransformation(element);
+        Transformation transformation = readTransformation(parser, element);
         DataAssociation da = new DataAssociation(sources, target, assignments, transformation);
         if (da.getTarget() != null && da.getSources().isEmpty() && da.getAssignments().isEmpty()) {
             // incomplete description we ignore it
@@ -567,16 +590,22 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         return Optional.of(da);
     }
 
-    private Transformation readTransformation(Element parent) {
+    private Transformation readTransformation(Parser parser, Element parent) {
         Optional<Element> element = readSingleChildElementByTag(parent, "transformation");
         if (element.isEmpty()) {
             return null;
         }
         String lang = element.get().getAttribute("language");
+        if ((lang == null || lang.isBlank()) && DefinitionsHandler.isFeelDocument(parser)) {
+            lang = ExpressionLanguages.FEEL;
+        }
         String expression = element.get().getTextContent();
 
+        // a transformation produces a value of any type, unlike a condition
         ReturnValueEvaluator evaluator = null;
-        if (lang.toLowerCase().contains("mvel")) {
+        if (ExpressionLanguages.isFeel(lang)) {
+            evaluator = new FeelReturnValueEvaluator(expression, Object.class);
+        } else if (lang.toLowerCase().contains("mvel")) {
             evaluator = new MVELInterpretedReturnValueEvaluator(expression);
         }
         return new Transformation(lang, expression, evaluator);
@@ -603,7 +632,8 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         }
     }
 
-    private List<Assignment> readAssignments(Element parent, Function<String, DataDefinition> sourceResolver, Function<String, DataDefinition> targetResolver) {
+    private List<Assignment> readAssignments(Parser parser, Element parent, Function<String, DataDefinition> sourceResolver, Function<String, DataDefinition> targetResolver) {
+        String documentLanguage = DefinitionsHandler.documentExpressionLanguage(parser);
         List<Assignment> assignments = new ArrayList<>();
         readChildrenElementsByTag(parent, "assignment").forEach(element -> {
             Optional<Element> from = readSingleChildElementByTag(element, "from");
@@ -612,11 +642,16 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
             if (language == null || language.isEmpty()) {
                 language = element.getAttribute("language");
             }
+            if (language.isEmpty() && ExpressionLanguages.isFeel(documentLanguage)) {
+                // no language of its own: follow the document default. Only FEEL is propagated - an MVEL document
+                // leaves the dialect unset, which is what the assignment heuristics below already expect.
+                language = ExpressionLanguages.FEEL;
+            }
             String source = from.get().getTextContent();
             String sourceId = from.get().getAttribute("id");
             String target = to.get().getTextContent();
             String targetId = to.get().getAttribute("id");
-            if (!language.isEmpty()) {
+            if (!language.isEmpty() && !ExpressionLanguages.isFeel(language)) {
                 assignments.add(new Assignment(language, toDataExpression(sourceId, source), toDataExpression(targetId, target)));
             } else {
                 source = cleanUp(source);
@@ -629,7 +664,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
                 if (targetDataSpec == null) {
                     targetDataSpec = toDataExpression(targetId, target);
                 }
-                logger.debug("No language set for assignment {} to {}. Applying heuristics", sourceDataSpec, targetDataSpec);
+                logger.debug("Applying assignment heuristics for {} to {} with language '{}'", sourceDataSpec, targetDataSpec, language);
                 assignments.add(new Assignment(language.isEmpty() ? null : language, sourceDataSpec, targetDataSpec));
             }
         });
@@ -639,17 +674,15 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
     /**
      * Simplifies variable expression in order to improve performance
      *
-     * If the expression contains just once variable, we can skip MVEL expression evaluation
-     * 
-     * @param expression MVEL expression to evaluate
+     * If the expression is just one variable, we can skip expression evaluation altogether
+     *
+     * @param expression expression to evaluate
      * @return Variable name if expression evaluation is not needed, original expression otherwise
      */
     private String cleanUp(String expression) {
         Matcher matcher = PatternConstants.SINGLE_PARAMETER_MATCHER.matcher(expression);
-        if (matcher.matches()) {
-            if (!matcher.group(1).contains(".")) {
-                return matcher.group(1);
-            }
+        if (matcher.matches() && VARIABLE_NAME.matcher(matcher.group(1)).matches()) {
+            return matcher.group(1);
         }
 
         return expression;
@@ -770,9 +803,12 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         // this is just an expression
         ReturnValueEvaluator evaluator = null;
         String completionConditionLang = multiInstanceSpecification.getCompletionConditionLang();
-        if ((completionConditionLang == null || completionConditionLang.isBlank() || completionConditionLang.toLowerCase().contains("mvel"))
-                && multiInstanceSpecification.getCompletionCondition() != null) {
-            evaluator = new MVELInterpretedReturnValueEvaluator(multiInstanceSpecification.getCompletionCondition());
+        if (multiInstanceSpecification.getCompletionCondition() != null) {
+            if (ExpressionLanguages.isFeel(completionConditionLang)) {
+                evaluator = new FeelReturnValueEvaluator(multiInstanceSpecification.getCompletionCondition());
+            } else if (ExpressionLanguages.isMvel(completionConditionLang) || completionConditionLang == null) {
+                evaluator = new MVELInterpretedReturnValueEvaluator(multiInstanceSpecification.getCompletionCondition());
+            }
         }
         forEachNode.setCompletionConditionExpression(evaluator);
         forEachNode.setMultiInstanceSpecification(multiInstanceSpecification);
@@ -840,11 +876,14 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
             }
         });
 
+        String documentLanguage = DefinitionsHandler.documentExpressionLanguage(parser);
         readSingleChildElementByTag(multiInstanceNode, COMPLETION_CONDITION).ifPresent(completeCondition -> {
             String completion = completeCondition.getTextContent();
             if (completion != null && !completion.isEmpty()) {
                 multiInstanceSpecification.setCompletionCondition(completion);
-                multiInstanceSpecification.setCompletionConditionLang(completeCondition.getAttribute("language"));
+                String language = completeCondition.getAttribute("language");
+                multiInstanceSpecification.setCompletionConditionLang(
+                        (language == null || language.isBlank()) && ExpressionLanguages.isFeel(documentLanguage) ? ExpressionLanguages.FEEL : language);
             }
         });
         return multiInstanceSpecification;

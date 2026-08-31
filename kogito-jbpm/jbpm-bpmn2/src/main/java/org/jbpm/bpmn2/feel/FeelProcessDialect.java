@@ -28,13 +28,15 @@ import org.jbpm.process.builder.dialect.ProcessDialect;
 public class FeelProcessDialect implements ProcessDialect {
 
     private static final ReturnValueEvaluatorBuilder returnValueEvaluatorBuilder = new FeelReturnValueEvaluatorBuilder();
+    private static final ActionBuilder actionBuilder = new FeelActionBuilder();
+    private static final AssignmentBuilder assignmentBuilder = new FeelAssignmentBuilder();
 
     public void addProcess(final ProcessBuildContext context) {
         // @TODO setup line mappings
     }
 
     public ActionBuilder getActionBuilder() {
-        throw new UnsupportedOperationException("FeelProcessDialect.getActionBuilder is not supported");
+        return actionBuilder;
     }
 
     public ProcessClassBuilder getProcessClassBuilder() {
@@ -46,7 +48,7 @@ public class FeelProcessDialect implements ProcessDialect {
     }
 
     public AssignmentBuilder getAssignmentBuilder() {
-        throw new UnsupportedOperationException("FEEL assignments not supported");
+        return assignmentBuilder;
     }
 
 }

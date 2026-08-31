@@ -40,10 +40,12 @@ import org.jbpm.process.instance.context.exclusive.ExclusiveGroupInstance;
 import org.jbpm.process.instance.context.variable.VariableScopeInstance;
 import org.jbpm.process.instance.impl.Action;
 import org.jbpm.process.instance.impl.ConstraintEvaluator;
+import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.jbpm.util.ContextFactory;
 import org.jbpm.util.PatternConstants;
 import org.jbpm.workflow.core.Constraint;
 import org.jbpm.workflow.core.Node;
+import org.jbpm.workflow.core.WorkflowProcess;
 import org.jbpm.workflow.core.impl.NodeImpl;
 import org.jbpm.workflow.instance.WorkflowProcessInstance;
 import org.jbpm.workflow.instance.WorkflowRuntimeException;
@@ -721,6 +723,14 @@ public abstract class NodeInstanceImpl implements org.jbpm.workflow.instance.Nod
         return m.find() ? m.group(1) : expression;
     }
 
+    /**
+     * The expression language this process selected on <code>&lt;definitions expressionLanguage&gt;</code>.
+     */
+    protected String expressionLanguage() {
+        org.kie.api.definition.process.Process process = getProcessInstance().getProcess();
+        return process instanceof WorkflowProcess ? ((WorkflowProcess) process).getExpressionLanguage() : null;
+    }
+
     public String resolveExpression(String expression) {
         return isExpression(expression) ? (String) resolveValue(expression) : expression;
     }
@@ -755,10 +765,12 @@ public abstract class NodeInstanceImpl implements org.jbpm.workflow.instance.Nod
                         replacements.put(paramName, variableValue);
                     } else {
                         try {
-                            Object variableValue = MVELProcessHelper.evaluator().eval(paramName, new NodeInstanceResolverFactory(this));
+                            Object variableValue = InterpolationEvaluator.evaluate(expressionLanguage(), paramName,
+                                    () -> new NodeInstanceResolverFactory(this),
+                                    () -> BpmnFeelVariables.forInterpolation(ContextFactory.fromNode(this)));
                             replacements.put(paramName, variableValue);
                         } catch (Exception t) {
-                            logger.error("MVEL failed to replace variable {} in process {} for node {}. Continuing without setting process id", paramName, processInstance.getProcessId(),
+                            logger.error("Failed to replace variable {} in process {} for node {}. Continuing without setting process id", paramName, processInstance.getProcessId(),
                                     getNodeName(), t);
                         }
                     }

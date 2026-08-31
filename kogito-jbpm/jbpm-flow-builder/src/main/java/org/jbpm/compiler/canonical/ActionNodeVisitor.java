@@ -24,19 +24,26 @@ import java.util.Optional;
 import org.jbpm.process.core.context.exception.CompensationScope;
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.process.core.context.variable.VariableScope;
+import org.jbpm.process.instance.impl.actions.FeelScriptAction;
 import org.jbpm.process.instance.impl.actions.HandleEscalationAction;
 import org.jbpm.process.instance.impl.actions.ProcessInstanceCompensationAction;
 import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.ruleflow.core.factory.ActionNodeFactory;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.DroolsAction;
 import org.jbpm.workflow.core.impl.DroolsConsequenceAction;
 import org.jbpm.workflow.core.node.ActionNode;
+import org.kie.kogito.internal.utils.ConversionUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.github.javaparser.StaticJavaParser;
+import com.github.javaparser.ast.NodeList;
 import com.github.javaparser.ast.body.Parameter;
+import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.LambdaExpr;
+import com.github.javaparser.ast.expr.ObjectCreationExpr;
+import com.github.javaparser.ast.expr.StringLiteralExpr;
 import com.github.javaparser.ast.stmt.BlockStmt;
 import com.github.javaparser.ast.type.UnknownType;
 
@@ -91,6 +98,13 @@ public class ActionNodeVisitor extends AbstractNodeVisitor<ActionNode> {
             if (droolsConsequenceAction.getMetaData("Action") instanceof HandleEscalationAction) {
                 HandleEscalationAction action = (HandleEscalationAction) droolsConsequenceAction.getMetaData("Action");
                 body.addStatement(getFactoryMethod(getNodeId(node), METHOD_ACTION, buildEscalationAction(action.getFaultName(), action.getVariableName())));
+            } else if (ExpressionLanguages.isFeel(droolsConsequenceAction.getDialect())) {
+                String consequence = getActionConsequence(node.getAction());
+                if (consequence == null || consequence.trim().isEmpty()) {
+                    LOGGER.warn("Action node {} name {} has no action defined!", node.getId().toExternalFormat(), node.getName());
+                } else {
+                    body.addStatement(getFactoryMethod(getNodeId(node), METHOD_ACTION, buildFeelScriptAction(consequence)));
+                }
             } else {
                 BlockStmt actionBody = new BlockStmt();
                 String consequence = getActionConsequence(node.getAction());
@@ -115,6 +129,16 @@ public class ActionNodeVisitor extends AbstractNodeVisitor<ActionNode> {
         }
         addNodeMappings(node, body, getNodeId(node));
         body.addStatement(getDoneMethod(getNodeId(node)));
+    }
+
+    /**
+     * A FEEL script task is not parsed as Java: it is handed to the runtime evaluator, which applies the FEEL script
+     * semantics - evaluate to a context, write its entries back to the process variables they name.
+     */
+    private static Expression buildFeelScriptAction(String consequence) {
+        return new ObjectCreationExpr(null,
+                StaticJavaParser.parseClassOrInterfaceType(FeelScriptAction.class.getName()),
+                NodeList.nodeList(new StringLiteralExpr(ConversionUtils.sanitizeString(consequence))));
     }
 
     private boolean isIntermediateCompensation(ActionNode node) {

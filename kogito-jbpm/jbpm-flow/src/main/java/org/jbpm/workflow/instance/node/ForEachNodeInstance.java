@@ -37,7 +37,6 @@ import org.jbpm.process.instance.KogitoProcessContextImpl;
 import org.jbpm.process.instance.context.variable.VariableScopeInstance;
 import org.jbpm.process.instance.impl.Action;
 import org.jbpm.process.instance.impl.ReturnValueEvaluator;
-import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.util.ContextFactory;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.node.AsyncEventNodeInstance;
@@ -193,8 +192,6 @@ public class ForEachNodeInstance extends CompositeContextNodeInstance {
                     VariableScope.VARIABLE_SCOPE, collectionExpression);
             if (variableScopeInstance != null) {
                 collection = variableScopeInstance.getVariable(collectionExpression);
-            } else if (getForEachNode().getEvaluateExpression() != null) {
-                collection = getForEachNode().getEvaluateExpression().eval(getVariable((String) getForEachNode().getMetaData(Metadata.VARIABLE)), Collection.class, ContextFactory.fromNode(this));
             } else {
                 try {
                     collection = MVELProcessHelper.evaluator().eval(collectionExpression, new NodeInstanceResolverFactory(

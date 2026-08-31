@@ -1,0 +1,58 @@
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<definitions id="Definition" targetNamespace="" typeLanguage="http://www.java.com/javaTypes"
+             expressionLanguage="http://example.org/not-a-language"
+             xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:tns="http://www.jboss.org/drools">
+
+  <itemDefinition id="_scoreItem" structureRef="Integer" />
+  <itemDefinition id="_pathItem" structureRef="String" />
+
+  <process processType="Private" isExecutable="true" id="UnknownExpressionLanguage" name="process" tns:packageName="org.jbpm.bpmn2.feel">
+    <property id="score" itemSubjectRef="_scoreItem"/>
+    <property id="path" itemSubjectRef="_pathItem"/>
+
+    <startEvent id="start" />
+    <sequenceFlow id="start-split" sourceRef="start" targetRef="split" />
+    <exclusiveGateway id="split" gatewayDirection="Diverging" />
+
+    <!-- no language of its own, and the document names one we do not know: MVEL, as always.
+         Java-bean syntax proves it is MVEL rather than FEEL. -->
+    <sequenceFlow id="split-hit" sourceRef="split" targetRef="hit">
+      <conditionExpression xsi:type="tFormalExpression">score.intValue() &gt; 5</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="split-miss" sourceRef="split" targetRef="miss">
+      <conditionExpression xsi:type="tFormalExpression">score.intValue() &lt;= 5</conditionExpression>
+    </sequenceFlow>
+
+    <scriptTask id="hit" name="Hit" scriptFormat="http://www.java.com/java">
+      <script>kcontext.setVariable("path", "hit");</script>
+    </scriptTask>
+    <sequenceFlow id="hit-end" sourceRef="hit" targetRef="end1" />
+    <endEvent id="end1" />
+
+    <scriptTask id="miss" name="Miss" scriptFormat="http://www.java.com/java">
+      <script>kcontext.setVariable("path", "miss");</script>
+    </scriptTask>
+    <sequenceFlow id="miss-end" sourceRef="miss" targetRef="end2" />
+    <endEvent id="end2" />
+  </process>
+</definitions>

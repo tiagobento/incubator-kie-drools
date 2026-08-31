@@ -1,0 +1,42 @@
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+
+<definitions id="Definition" targetNamespace="" typeLanguage="http://www.java.com/javaTypes"
+             expressionLanguage="http://www.omg.org/spec/DMN/20180521/FEEL/"
+             xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:tns="http://www.jboss.org/drools">
+
+  <itemDefinition id="_secondsItem" structureRef="Integer" />
+
+  <process processType="Private" isExecutable="true" id="FeelTimer" name="timer" tns:packageName="org.jbpm.bpmn2.feel">
+    <property id="seconds" itemSubjectRef="_secondsItem"/>
+
+    <startEvent id="start" />
+    <sequenceFlow id="start-timer" sourceRef="start" targetRef="timer" />
+    <intermediateCatchEvent id="timer" name="Timer">
+      <timerEventDefinition>
+        <!-- resolved through the node interpolation path; "string(...)" is FEEL only -->
+        <timeDuration xsi:type="tFormalExpression"><![CDATA[#{"PT" + string(seconds) + "S"}]]></timeDuration>
+      </timerEventDefinition>
+    </intermediateCatchEvent>
+    <sequenceFlow id="timer-end" sourceRef="timer" targetRef="end" />
+    <endEvent id="end" />
+  </process>
+</definitions>

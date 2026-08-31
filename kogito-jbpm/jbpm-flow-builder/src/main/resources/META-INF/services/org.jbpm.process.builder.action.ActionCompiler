@@ -17,5 +17,6 @@
 # under the License.
 #
 
+org.jbpm.process.builder.action.FeelActionCompiler
 org.jbpm.process.builder.action.JavaActionCompiler
 org.jbpm.process.builder.action.MVELActionCompiler

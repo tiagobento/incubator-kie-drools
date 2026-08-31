@@ -21,6 +21,7 @@ package org.jbpm.util;
 import org.jbpm.process.instance.KogitoProcessContextImpl;
 import org.jbpm.process.instance.ProcessInstance;
 import org.kie.kogito.internal.process.runtime.KogitoNodeInstance;
+import org.kie.kogito.internal.process.runtime.KogitoProcessInstance;
 import org.kie.kogito.internal.process.workitem.KogitoWorkItem;
 
 public class ContextFactory {
@@ -30,6 +31,12 @@ public class ContextFactory {
 
     public static KogitoProcessContextImpl fromItem(KogitoWorkItem workItem) {
         return fromNode(workItem.getNodeInstance());
+    }
+
+    public static KogitoProcessContextImpl fromProcessInstance(KogitoProcessInstance instance) {
+        KogitoProcessContextImpl context = new KogitoProcessContextImpl(((ProcessInstance) instance).getKnowledgeRuntime());
+        context.setProcessInstance(instance);
+        return context;
     }
 
     public static KogitoProcessContextImpl fromNode(KogitoNodeInstance instance) {

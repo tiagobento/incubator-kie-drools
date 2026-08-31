@@ -61,8 +61,8 @@ public class CallActivityHandler extends AbstractNodeHandler {
         subProcessNode.setMetaData("DataInputs", new HashMap<String, String>());
         subProcessNode.setMetaData("DataOutputs", new HashMap<String, String>());
 
-        handleScript(subProcessNode, element, "onEntry");
-        handleScript(subProcessNode, element, "onExit");
+        handleScript(parser, subProcessNode, element, "onEntry");
+        handleScript(parser, subProcessNode, element, "onExit");
 
         Node currentNode = subProcessNode;
         subProcessNode.setIoSpecification(readIOEspecification(parser, element));

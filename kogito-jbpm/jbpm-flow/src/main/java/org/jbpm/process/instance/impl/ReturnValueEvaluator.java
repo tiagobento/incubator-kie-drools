@@ -18,6 +18,7 @@
  */
 package org.jbpm.process.instance.impl;
 
+import java.util.Map;
 import java.util.function.Function;
 
 import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
@@ -44,6 +45,14 @@ public interface ReturnValueEvaluator {
 
     default Object eval(Function<String, Object> resolver) {
         return this.evaluate(new EmtpyKogitoProcessContext(resolver));
+    }
+
+    /**
+     * Same, when the whole scope is known. Prefer this: a language without a resolver hook, such as FEEL, needs every
+     * value up front and cannot work from a resolver function.
+     */
+    default Object eval(Map<String, Object> variables) {
+        return this.evaluate(new EmtpyKogitoProcessContext(variables));
     }
 
     default String root() {

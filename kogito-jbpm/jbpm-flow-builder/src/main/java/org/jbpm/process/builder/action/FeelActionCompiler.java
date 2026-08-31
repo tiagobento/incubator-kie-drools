@@ -16,36 +16,34 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.jbpm.compiler.canonical.builtin;
+package org.jbpm.process.builder.action;
 
-import org.jbpm.process.core.ContextResolver;
-import org.jbpm.process.instance.impl.ExpressionReturnValueEvaluator;
+import org.jbpm.process.instance.impl.actions.FeelScriptAction;
+import org.jbpm.util.ExpressionLanguages;
+import org.jbpm.workflow.core.impl.NodeImpl;
 import org.kie.kogito.internal.utils.ConversionUtils;
 
 import com.github.javaparser.StaticJavaParser;
 import com.github.javaparser.ast.NodeList;
-import com.github.javaparser.ast.expr.ClassExpr;
 import com.github.javaparser.ast.expr.Expression;
 import com.github.javaparser.ast.expr.ObjectCreationExpr;
 import com.github.javaparser.ast.expr.StringLiteralExpr;
 
-public class JqReturnValueEvaluatorBuilder implements ReturnValueEvaluatorBuilder {
+/**
+ * Compiles an onEntry/onExit script written in FEEL, with the same semantics as a FEEL script task: the expression
+ * evaluates to a context whose entries are written back to the process variables they name.
+ */
+public class FeelActionCompiler implements ActionCompiler {
 
     @Override
-    public boolean accept(String dialect) {
-        return dialect.toLowerCase().contains("jq");
+    public String[] dialects() {
+        return new String[] { ExpressionLanguages.FEEL };
     }
 
     @Override
-    public Expression build(ContextResolver resolver, String expression, Class<?> type, String rootName) {
-        NodeList<Expression> arguments = new NodeList<>();
-        arguments.add(new StringLiteralExpr("jq"));
-        arguments.add(new StringLiteralExpr(ConversionUtils.sanitizeString(expression)));
-        arguments.add(new StringLiteralExpr(rootName));
-        arguments.add(new ClassExpr(StaticJavaParser.parseClassOrInterfaceType(type.getName())));
-
-        return new ObjectCreationExpr(null, StaticJavaParser.parseClassOrInterfaceType(ExpressionReturnValueEvaluator.class.getName()), arguments);
-
+    public Expression buildAction(NodeImpl nodeImpl, String script) {
+        return new ObjectCreationExpr(null,
+                StaticJavaParser.parseClassOrInterfaceType(FeelScriptAction.class.getName()),
+                NodeList.nodeList(new StringLiteralExpr(ConversionUtils.sanitizeString(script))));
     }
-
 }

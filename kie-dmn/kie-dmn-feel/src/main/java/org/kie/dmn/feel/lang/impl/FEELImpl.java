@@ -62,8 +62,13 @@ public class FEELImpl
     private final boolean doCompile;
     private final FEELDialect feelDialect;
     private final DMNVersion dmnVersion;
+    private final boolean externalFunctionsDisabled;
 
     FEELImpl(ClassLoader cl, List<FEELProfile> profiles, FEELDialect feelDialect, DMNVersion dmnVersion) {
+        this(cl, profiles, feelDialect, dmnVersion, false);
+    }
+
+    FEELImpl(ClassLoader cl, List<FEELProfile> profiles, FEELDialect feelDialect, DMNVersion dmnVersion, boolean externalFunctionsDisabled) {
         this.classLoader = cl;
         this.profiles = Collections.unmodifiableList(profiles);
         ExecutionFrameImpl frame = null;
@@ -88,6 +93,7 @@ public class FEELImpl
         customFunctions = Collections.unmodifiableCollection(functions.values());
         this.feelDialect = feelDialect;
         this.dmnVersion = dmnVersion;
+        this.externalFunctionsDisabled = externalFunctionsDisabled;
     }
 
     @Override
@@ -114,7 +120,8 @@ public class FEELImpl
                 expression,
                 ctx,
                 ProcessedFEELUnit.DefaultMode.of(doCompile || ctx.isDoCompile()),
-                profiles);
+                profiles,
+                externalFunctionsDisabled);
     }
 
     @Override

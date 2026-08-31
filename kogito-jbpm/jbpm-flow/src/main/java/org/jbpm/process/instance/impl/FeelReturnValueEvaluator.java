@@ -18,84 +18,66 @@
  */
 package org.jbpm.process.instance.impl;
 
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
-import org.jbpm.process.core.context.variable.VariableScope;
-import org.jbpm.process.instance.context.variable.VariableScopeInstance;
-import org.jbpm.workflow.instance.WorkflowProcessInstance;
-import org.kie.api.runtime.Globals;
+import org.jbpm.process.instance.impl.feel.BpmnFeel;
+import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.kie.dmn.api.feel.runtime.events.FEELEvent;
 import org.kie.dmn.feel.FEEL;
-import org.kie.dmn.feel.lang.impl.FEELBuilder;
-import org.kie.dmn.feel.parser.feel11.profiles.KieExtendedFEELProfile;
+import org.kie.dmn.feel.lang.CompiledExpression;
 import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
 
 public class FeelReturnValueEvaluator extends AbstractReturnValueEvaluator {
 
+    /** Compiled once and kept: parsing is the expensive part of a FEEL evaluation, and the expression never changes. */
+    private transient CompiledExpression compiledExpression;
+
     public FeelReturnValueEvaluator() {
-        super("FEEL", "true()");
+        this("true()");
     }
 
+    /**
+     * An evaluator for a condition: the expression has to produce a boolean.
+     */
     public FeelReturnValueEvaluator(String expr) {
-        super("FEEL", expr);
+        this(expr, Boolean.class);
+    }
+
+    /**
+     * @param type what the expression is expected to produce. Only a condition is held to a boolean; a transformation
+     *        or a correlation expression produces a value of any type.
+     */
+    public FeelReturnValueEvaluator(String expr, Class<?> type) {
+        super("FEEL", expr, type, null);
     }
 
     public Object evaluate(KogitoProcessContext context) {
-        Map<String, Object> variables = new HashMap<>();
-        variables.put("kcontext", context);
+        Map<String, Object> variables = BpmnFeelVariables.of(context);
 
-        // insert globals into context
-        Globals globals = context.getKieRuntime().getGlobals();
-
-        if (globals != null && globals.getGlobalKeys() != null) {
-            for (String gKey : globals.getGlobalKeys()) {
-                variables.put(gKey, globals.get(gKey));
-            }
-        }
-        if (context.getProcessInstance() != null && context.getProcessInstance().getProcess() != null) {
-            // insert process variables
-            VariableScopeInstance variableScope = (VariableScopeInstance) ((WorkflowProcessInstance) context.getProcessInstance())
-                    .getContextInstance(VariableScope.VARIABLE_SCOPE);
-
-            variables.putAll(variableScope.getVariables());
-        }
-        FEEL feel = FEELBuilder.builder().withProfiles(Collections.singletonList(new KieExtendedFEELProfile())).build();
+        FEEL feel = BpmnFeel.newFeel();
         FeelErrorEvaluatorListener listener = new FeelErrorEvaluatorListener();
         feel.addListener(listener);
 
-        Object value = feel.evaluate(expression(), variables);
+        CompiledExpression compiled = compiledExpression != null
+                ? compiledExpression
+                : BpmnFeel.compileQuietly(feel, expression(), variables.keySet());
 
-        processErrorEvents(listener.getErrorEvents());
-        if (!(value instanceof Boolean)) {
+        Object value = feel.evaluate(compiled, variables);
+
+        // compile and evaluation errors are reported together, and only a clean expression is worth keeping
+        BpmnFeel.failOnError(listener, expression());
+        compiledExpression = compiled;
+        if (Boolean.class.equals(type()) && !(value instanceof Boolean)) {
             throw new RuntimeException("Constraints must return boolean values: " +
                     expression() + " returns " + value +
                     (value == null ? "" : " (type=" + value.getClass()));
         }
 
-        return ((Boolean) value).booleanValue();
-    }
-
-    private void processErrorEvents(List<FEELEvent> errorEvents) {
-        if (errorEvents.isEmpty()) {
-            return;
-        }
-        String exceptionMessage = errorEvents.stream().map(FeelReturnValueEvaluator::eventToMessage).collect(Collectors.joining(", "));
-        throw new FeelReturnValueEvaluatorException(exceptionMessage);
+        return value;
     }
 
     public static String eventToMessage(FEELEvent event) {
-        StringBuilder messageBuilder = new StringBuilder(event.getSeverity().toString()).append(" ").append(event.getMessage());
-        if (event.getOffendingSymbol() != null) {
-            messageBuilder.append(" ( offending symbol: '").append(event.getOffendingSymbol()).append("' )");
-        }
-        if (event.getSourceException() != null) {
-            messageBuilder.append("  ").append(event.getSourceException().getMessage());
-        }
-        return messageBuilder.toString();
+        return BpmnFeel.eventToMessage(event);
     }
 
 }

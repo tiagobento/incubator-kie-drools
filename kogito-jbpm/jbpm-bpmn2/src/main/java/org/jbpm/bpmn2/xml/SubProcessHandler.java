@@ -71,8 +71,8 @@ public class SubProcessHandler extends AbstractNodeHandler {
         CompositeContextNode compositeNode = (CompositeContextNode) node;
         super.handleNode(node, element, uri, localName, parser);
 
-        handleScript(compositeNode, element, "onEntry");
-        handleScript(compositeNode, element, "onExit");
+        handleScript(parser, compositeNode, element, "onEntry");
+        handleScript(parser, compositeNode, element, "onExit");
         compositeNode.setIoSpecification(readIOEspecification(parser, element));
         compositeNode.setMultiInstanceSpecification(readMultiInstanceSpecification(parser, element, compositeNode.getIoSpecification()));
 
@@ -81,8 +81,8 @@ public class SubProcessHandler extends AbstractNodeHandler {
         if (compositeNode.getMultiInstanceSpecification().hasMultiInstanceInput()) {
             ForEachNode forEachNode = (ForEachNode) decorateMultiInstanceSpecificationSubProcess(compositeNode, compositeNode.getMultiInstanceSpecification());
 
-            handleScript(forEachNode, element, "onEntry");
-            handleScript(forEachNode, element, "onExit");
+            handleScript(parser, forEachNode, element, "onEntry");
+            handleScript(parser, forEachNode, element, "onExit");
 
             RuleFlowProcess process = (RuleFlowProcess) ((ProcessBuildData) parser.getData()).getMetaData(ProcessHandler.CURRENT_PROCESS);
             List<SequenceFlow> connections = (List<SequenceFlow>) forEachNode.getMetaData(ProcessHandler.CONNECTIONS);

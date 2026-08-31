@@ -29,7 +29,7 @@ public interface ActionCompiler {
     String[] dialects();
 
     default boolean accept(String dialect) {
-        return Arrays.asList(dialect).contains(dialect);
+        return Arrays.asList(dialects()).contains(dialect);
     }
 
     Expression buildAction(NodeImpl nodeImpl, String scrtip);

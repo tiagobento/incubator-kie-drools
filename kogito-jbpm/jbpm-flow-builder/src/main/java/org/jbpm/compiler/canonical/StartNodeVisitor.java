@@ -120,7 +120,8 @@ public class StartNodeVisitor extends AbstractNodeVisitor<StartNode> {
         arguments.add(new StringLiteralExpr((String) nodeMetaData.get(TRIGGER_REF)));
         arguments.add(buildDataAssociationsExpression(startNode, startNode.getIoSpecification().getDataOutputAssociation()));
         if (nodeMetaData.containsKey(TRIGGER_EXPRESSION)) {
-            arguments.add(returnValueEvaluatorBuilderService.build(startNode, (String) nodeMetaData.get(Metadata.TRIGGER_EXPRESSION_LANGUAGE), (String) nodeMetaData.get(TRIGGER_EXPRESSION)));
+            arguments.add(returnValueEvaluatorBuilderService.build(startNode, (String) nodeMetaData.get(Metadata.TRIGGER_EXPRESSION_LANGUAGE), (String) nodeMetaData.get(TRIGGER_EXPRESSION),
+                    Boolean.class, null));
         }
         body.addStatement(getFactoryMethod(getNodeId(startNode), METHOD_TRIGGER, arguments.toArray(Expression[]::new)));
     }

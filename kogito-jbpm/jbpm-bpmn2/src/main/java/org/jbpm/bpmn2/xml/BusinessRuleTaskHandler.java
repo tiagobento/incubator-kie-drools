@@ -88,8 +88,8 @@ public class BusinessRuleTaskHandler extends AbstractNodeHandler {
             ruleSetNode.setRuleType(RuleType.of(ruleFlowGroup, language));
         }
 
-        handleScript(ruleSetNode, element, "onEntry");
-        handleScript(ruleSetNode, element, "onExit");
+        handleScript(parser, ruleSetNode, element, "onEntry");
+        handleScript(parser, ruleSetNode, element, "onExit");
 
         return ruleSetNode;
     }

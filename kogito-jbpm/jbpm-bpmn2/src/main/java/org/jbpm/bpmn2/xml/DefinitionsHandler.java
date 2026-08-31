@@ -37,16 +37,24 @@ import org.jbpm.process.core.datatype.DataType;
 import org.jbpm.process.core.datatype.DataTypeResolver;
 import org.jbpm.process.core.datatype.impl.type.UndefinedDataType;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
+import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.NodeContainer;
 import org.jbpm.workflow.core.node.ForEachNode;
 import org.jbpm.workflow.core.node.WorkItemNode;
 import org.kie.api.definition.process.Node;
 import org.kie.api.definition.process.Process;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.Element;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
 
 public class DefinitionsHandler extends BaseAbstractHandler implements Handler {
+
+    /** Key under which the document expression language is published to the node handlers while parsing. */
+    public static final String EXPRESSION_LANGUAGE = "ExpressionLanguage";
+
+    private static final Logger logger = LoggerFactory.getLogger(DefinitionsHandler.class);
 
     @SuppressWarnings("unchecked")
     public DefinitionsHandler() {
@@ -66,7 +74,47 @@ public class DefinitionsHandler extends BaseAbstractHandler implements Handler {
             final Attributes attrs, final Parser parser)
             throws SAXException {
         parser.startElementBuilder(localName, attrs);
+        // read before the children are parsed: node handlers need to know the document language while they read
+        ((ProcessBuildData) parser.getData()).setMetaData(EXPRESSION_LANGUAGE, readExpressionLanguage(attrs.getValue("expressionLanguage")));
         return new Definitions();
+    }
+
+    /**
+     * The expression language this document declared, or <code>null</code> for MVEL.
+     *
+     * Published to the node handlers while parsing, since a field that declares no language of its own follows it.
+     */
+    public static String documentExpressionLanguage(Parser parser) {
+        return (String) ((ProcessBuildData) parser.getData()).getMetaData(EXPRESSION_LANGUAGE);
+    }
+
+    /**
+     * Whether this document selected FEEL, for a field deciding whether to follow the document default.
+     */
+    public static boolean isFeelDocument(Parser parser) {
+        return ExpressionLanguages.isFeel(documentExpressionLanguage(parser));
+    }
+
+    /**
+     * The document-wide expression language, as BPMN 2.0 defines it on <code>&lt;definitions&gt;</code>.
+     *
+     * Only FEEL is stored: MVEL is the default and leaving it null keeps every existing document, and everything that
+     * reads the process expression language, exactly as it was. A language we do not recognise is reported and treated
+     * as MVEL, so a mistyped FEEL URI is visible rather than silently giving MVEL semantics.
+     */
+    private static String readExpressionLanguage(String language) {
+        if (language == null || language.isBlank()) {
+            return null;
+        }
+        if (ExpressionLanguages.isFeel(language)) {
+            return ExpressionLanguages.FEEL;
+        }
+        if (!ExpressionLanguages.isKnownDocumentLanguage(language)) {
+            logger.warn("Unknown expressionLanguage '{}' on <definitions>, MVEL will be used. Expected one of {}, {}, {} or {}.",
+                    language, ExpressionLanguages.MVEL_LANGUAGE, ExpressionLanguages.FEEL_LANGUAGE,
+                    ExpressionLanguages.DMN_FEEL_LANGUAGE, ExpressionLanguages.FEEL_LANGUAGE_SHORT);
+        }
+        return null;
     }
 
     @Override
@@ -80,9 +128,11 @@ public class DefinitionsHandler extends BaseAbstractHandler implements Handler {
 
         List<Interface> interfaces = (List<Interface>) ((ProcessBuildData) parser.getData()).getMetaData("Interfaces");
 
+        String expressionLanguage = documentExpressionLanguage(parser);
         for (Process process : processes) {
             RuleFlowProcess ruleFlowProcess = (RuleFlowProcess) process;
             ruleFlowProcess.setMetaData("TargetNamespace", namespace);
+            ruleFlowProcess.setExpressionLanguage(expressionLanguage);
             postProcessItemDefinitions(ruleFlowProcess, itemDefinitions, parser.getClassLoader());
             postProcessInterfaces(ruleFlowProcess, interfaces);
         }
