@@ -26,7 +26,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Stream;
 
-import org.jbpm.compiler.canonical.builtin.ReturnValueEvaluatorBuilderService;
 import org.jbpm.compiler.canonical.descriptors.ExpressionUtils;
 import org.jbpm.compiler.canonical.node.NodeVisitorBuilderService;
 import org.jbpm.process.core.Context;
@@ -39,6 +38,7 @@ import org.jbpm.process.core.correlation.Correlation;
 import org.jbpm.process.core.correlation.CorrelationManager;
 import org.jbpm.process.core.correlation.CorrelationProperties;
 import org.jbpm.process.core.correlation.Message;
+import org.jbpm.process.expression.ExpressionLanguage.Surface;
 import org.jbpm.process.instance.impl.ReturnValueEvaluator;
 import org.jbpm.process.instance.impl.actions.SignalProcessInstanceAction;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
@@ -86,11 +86,11 @@ public class ProcessVisitor extends AbstractVisitor {
 
     private NodeVisitorBuilderService nodeVisitorService;
 
-    private ReturnValueEvaluatorBuilderService returnValueEvaluatorBuilderService;
+    private ExpressionCodegen expressions;
 
     public ProcessVisitor(ClassLoader contextClassLoader) {
         nodeVisitorService = new NodeVisitorBuilderService(contextClassLoader);
-        returnValueEvaluatorBuilderService = ReturnValueEvaluatorBuilderService.instance(contextClassLoader);
+        expressions = ExpressionCodegen.of(contextClassLoader);
     }
 
     public void visitProcess(WorkflowProcess process, MethodDeclaration processMethod, ProcessMetaData metadata) {
@@ -179,7 +179,7 @@ public class ProcessVisitor extends AbstractVisitor {
                 CorrelationProperties properties = correlation.getMessageCorrelationFor(messageId);
                 for (String propertyName : properties.names()) {
                     ReturnValueEvaluator evaluator = properties.getExpressionFor(propertyName);
-                    Expression returnValueEvaluator = returnValueEvaluatorBuilderService.build(ruleFlowProcess, evaluator.dialect(), evaluator.expression());
+                    Expression returnValueEvaluator = expressions.evaluator(ruleFlowProcess, Surface.EXPRESSION, evaluator.dialect(), evaluator.expression(), Object.class, null);
                     body.addStatement(getFactoryMethod(FACTORY_FIELD_NAME, "newCorrelationProperty",
                             new StringLiteralExpr(correlation.getId()), new StringLiteralExpr(messageId), new StringLiteralExpr(propertyName), returnValueEvaluator));
                 }
@@ -187,7 +187,7 @@ public class ProcessVisitor extends AbstractVisitor {
             CorrelationProperties subscriptions = correlation.getProcessSubscription();
             for (String propertyName : subscriptions.names()) {
                 ReturnValueEvaluator evaluator = subscriptions.getExpressionFor(propertyName);
-                Expression returnValueEvaluator = returnValueEvaluatorBuilderService.build(ruleFlowProcess, evaluator.dialect(), evaluator.expression());
+                Expression returnValueEvaluator = expressions.evaluator(ruleFlowProcess, Surface.EXPRESSION, evaluator.dialect(), evaluator.expression(), Object.class, null);
                 body.addStatement(getFactoryMethod(FACTORY_FIELD_NAME, "newCorrelationSubscription",
                         new StringLiteralExpr(correlation.getId()), new StringLiteralExpr(propertyName), returnValueEvaluator));
             }

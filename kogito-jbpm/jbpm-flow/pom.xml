@@ -48,6 +48,7 @@
     <dependency>
       <groupId>org.kie.kogito</groupId>
       <artifactId>kogito-dmn</artifactId>
+      <!-- the DMN business rule task; nothing to do with FEEL as an expression language -->
       <optional>true</optional>
     </dependency>
     <dependency>
@@ -65,28 +66,6 @@
     <dependency>
       <groupId>org.kie.kogito</groupId>
       <artifactId>process-workitems</artifactId>
-    </dependency>
-    <dependency>
-      <groupId>org.drools</groupId>
-      <artifactId>drools-mvel</artifactId>
-      <exclusions>
-        <exclusion>
-          <groupId>org.drools</groupId>
-          <artifactId>drools-wiring-dynamic</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.drools</groupId>
-          <artifactId>drools-core</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.drools</groupId>
-          <artifactId>drools-compiler</artifactId>
-        </exclusion>
-        <exclusion>
-          <groupId>org.kie</groupId>
-          <artifactId>kie-internal</artifactId>
-        </exclusion>
-      </exclusions>
     </dependency>
     <dependency>
       <groupId>org.slf4j</groupId>

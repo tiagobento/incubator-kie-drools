@@ -23,13 +23,11 @@ import java.util.Map;
 import java.util.regex.Matcher;
 
 import org.jbpm.process.core.context.variable.VariableScope;
+import org.jbpm.process.expression.ExpressionLanguages;
+import org.jbpm.process.expression.ExpressionScope;
 import org.jbpm.process.instance.context.variable.VariableScopeInstance;
-import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
-import org.jbpm.util.ContextFactory;
 import org.jbpm.util.PatternConstants;
-import org.jbpm.workflow.core.WorkflowProcess;
 import org.jbpm.workflow.instance.impl.InterpolationEvaluator;
-import org.jbpm.workflow.instance.impl.NodeInstanceResolverFactory;
 import org.kie.api.runtime.process.NodeInstance;
 
 public class VariableUtil {
@@ -57,8 +55,7 @@ public class VariableUtil {
                 } else {
                     try {
                         Object variableValue = InterpolationEvaluator.evaluate(expressionLanguage(nodeInstance), paramName,
-                                () -> new NodeInstanceResolverFactory((org.jbpm.workflow.instance.NodeInstance) nodeInstance),
-                                () -> BpmnFeelVariables.forInterpolation(ContextFactory.fromNode((org.jbpm.workflow.instance.NodeInstance) nodeInstance)));
+                                ExpressionScope.of((org.jbpm.workflow.instance.NodeInstance) nodeInstance));
                         String variableValueString = variableValue == null ? "" : variableValue.toString();
                         replacements.put(paramName, variableValueString);
                     } catch (Exception t) {
@@ -75,7 +72,6 @@ public class VariableUtil {
     }
 
     private static String expressionLanguage(NodeInstance nodeInstance) {
-        org.kie.api.definition.process.Process process = nodeInstance.getProcessInstance().getProcess();
-        return process instanceof WorkflowProcess ? ((WorkflowProcess) process).getExpressionLanguage() : null;
+        return ExpressionLanguages.languageOf(nodeInstance.getProcessInstance().getProcess());
     }
 }

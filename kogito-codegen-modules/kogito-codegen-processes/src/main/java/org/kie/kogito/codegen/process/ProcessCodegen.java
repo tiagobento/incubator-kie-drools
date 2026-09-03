@@ -121,7 +121,6 @@ public class ProcessCodegen extends AbstractGenerator {
     private static final String RECORD_NODES_IO_GLOBAL_PROPERTY = "kogito.processes.nodes.record-io";
 
     static {
-        ProcessValidatorRegistry.getInstance().registerAdditonalValidator(JavaRuleFlowProcessValidator.getInstance());
         BPMN_SEMANTIC_MODULES.addSemanticModule(new BPMNSemanticModule());
         BPMN_SEMANTIC_MODULES.addSemanticModule(new BPMNExtensionsSemanticModule());
         BPMN_SEMANTIC_MODULES.addSemanticModule(new BPMNDISemanticModule());
@@ -151,6 +150,23 @@ public class ProcessCodegen extends AbstractGenerator {
     }
 
     private static List<GeneratedInfo<KogitoWorkflowProcess>> getGeneratedInfoForProcesses(KogitoBuildContext context, Collection<CollectedResource> resources,
+            boolean useSvgAddon,
+            Map<String, byte[]> processSVGMap,
+            Map<String, Throwable> processesErrors) {
+        // the expression languages a document may use are the application's dependencies, found through the
+        // application's class loader; a build tool's own thread may be loading from a class loader that has none
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        if (context.getClassLoader() != null) {
+            Thread.currentThread().setContextClassLoader(context.getClassLoader());
+        }
+        try {
+            return parseAndValidate(context, resources, useSvgAddon, processSVGMap, processesErrors);
+        } finally {
+            Thread.currentThread().setContextClassLoader(previous);
+        }
+    }
+
+    private static List<GeneratedInfo<KogitoWorkflowProcess>> parseAndValidate(KogitoBuildContext context, Collection<CollectedResource> resources,
             boolean useSvgAddon,
             Map<String, byte[]> processSVGMap,
             Map<String, Throwable> processesErrors) {

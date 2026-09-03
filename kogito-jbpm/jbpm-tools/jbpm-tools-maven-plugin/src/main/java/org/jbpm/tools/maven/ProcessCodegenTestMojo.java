@@ -27,9 +27,10 @@ import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
 
-@Mojo(name = ProcessCodegenTestMojo.GOAL, defaultPhase = LifecyclePhase.GENERATE_TEST_SOURCES)
+@Mojo(name = ProcessCodegenTestMojo.GOAL, defaultPhase = LifecyclePhase.GENERATE_TEST_SOURCES, requiresDependencyResolution = ResolutionScope.TEST)
 public class ProcessCodegenTestMojo extends AbstractMojo {
 
     public static final String GOAL = "jbpm-process-test-generation";
@@ -44,7 +45,7 @@ public class ProcessCodegenTestMojo extends AbstractMojo {
 
         Path sourceTestFolder = Paths.get(project.getBasedir().toString(), resources);
         Path outputTestFolder = Paths.get(project.getBuild().getDirectory(), "generated-test-sources", "jbpm");
-        ProcessCodeGenerationSupport codeGenSupport = new ProcessCodeGenerationSupport(sourceTestFolder, outputTestFolder, ClassLoaderHelper.getClassLoader(project));
+        ProcessCodeGenerationSupport codeGenSupport = new ProcessCodeGenerationSupport(sourceTestFolder, outputTestFolder, ClassLoaderHelper.getClassLoader(project, true));
         codeGenSupport.execute();
     }
 

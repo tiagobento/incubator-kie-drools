@@ -32,6 +32,7 @@ import org.jbpm.process.core.context.exception.ExceptionScope;
 import org.jbpm.process.core.context.exclusive.ExclusiveGroup;
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.process.core.context.variable.VariableScope;
+import org.jbpm.process.expression.ExpressionScope;
 import org.jbpm.process.instance.ContextInstance;
 import org.jbpm.process.instance.ContextInstanceContainer;
 import org.jbpm.process.instance.InternalProcessRuntime;
@@ -40,7 +41,6 @@ import org.jbpm.process.instance.context.exclusive.ExclusiveGroupInstance;
 import org.jbpm.process.instance.context.variable.VariableScopeInstance;
 import org.jbpm.process.instance.impl.Action;
 import org.jbpm.process.instance.impl.ConstraintEvaluator;
-import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.jbpm.util.ContextFactory;
 import org.jbpm.util.PatternConstants;
 import org.jbpm.workflow.core.Constraint;
@@ -765,9 +765,7 @@ public abstract class NodeInstanceImpl implements org.jbpm.workflow.instance.Nod
                         replacements.put(paramName, variableValue);
                     } else {
                         try {
-                            Object variableValue = InterpolationEvaluator.evaluate(expressionLanguage(), paramName,
-                                    () -> new NodeInstanceResolverFactory(this),
-                                    () -> BpmnFeelVariables.forInterpolation(ContextFactory.fromNode(this)));
+                            Object variableValue = InterpolationEvaluator.evaluate(expressionLanguage(), paramName, ExpressionScope.of(this));
                             replacements.put(paramName, variableValue);
                         } catch (Exception t) {
                             logger.error("Failed to replace variable {} in process {} for node {}. Continuing without setting process id", paramName, processInstance.getProcessId(),

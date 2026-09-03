@@ -114,6 +114,8 @@ public abstract class WorkflowProcessor {
     @BuildStep
     public ReflectiveClassBuildItem reflectionProcess(BuildProducer<ServiceProviderBuildItem> serviceProvider) {
         serviceProvider.produce(ServiceProviderBuildItem.allProvidersFromClassPath("org.kogito.workitem.rest.decorators.RequestDecorator"));
+        // the expression languages the application carries are looked up by the generated processes at runtime
+        serviceProvider.produce(ServiceProviderBuildItem.allProvidersFromClassPath("org.jbpm.process.expression.ExpressionLanguage"));
         return new ReflectiveClassBuildItem(true, true,
                 "org.kogito.workitem.rest.bodybuilders.ParamsRestWorkItemHandlerBodyBuilder",
                 "org.kogito.workitem.rest.decorators.CollectionParamsDecorator",

@@ -30,7 +30,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 
-import org.drools.mvel.java.JavaDialect;
 import org.jbpm.bpmn2.core.Association;
 import org.jbpm.bpmn2.core.Definitions;
 import org.jbpm.bpmn2.core.Error;
@@ -49,12 +48,13 @@ import org.jbpm.process.core.ContextContainer;
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.process.core.datatype.DataTypeResolver;
-import org.jbpm.process.instance.impl.FeelReturnValueEvaluator;
-import org.jbpm.process.instance.impl.MVELInterpretedReturnValueEvaluator;
+import org.jbpm.process.expression.DeferredReturnValueEvaluator;
+import org.jbpm.process.expression.ExpressionLanguage;
+import org.jbpm.process.expression.ExpressionLanguages;
 import org.jbpm.process.instance.impl.ReturnValueEvaluator;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
 import org.jbpm.ruleflow.core.WorkflowElementIdentifierFactory;
-import org.jbpm.util.ExpressionLanguages;
+import org.jbpm.util.JbpmClassLoaderUtil;
 import org.jbpm.util.PatternConstants;
 import org.jbpm.workflow.core.DroolsAction;
 import org.jbpm.workflow.core.Node;
@@ -256,7 +256,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
                                 actions = new ArrayList<>();
                                 node.setActions(type, actions);
                             }
-                            DroolsAction action = extractScript((Element) subXmlNode, DefinitionsHandler.documentExpressionLanguage(parser));
+                            DroolsAction action = extractScript(parser, (Element) subXmlNode);
                             actions.add(action);
                         }
                     }
@@ -265,25 +265,32 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         }
     }
 
+    /**
+     * A script read outside a document: it is in the language its scriptFormat names, else the default.
+     */
     public static DroolsAction extractScript(Element xmlNode) {
-        return extractScript(xmlNode, null);
+        return extractScript(xmlNode, ExpressionLanguages.DEFAULT, JbpmClassLoaderUtil.findClassLoader());
     }
 
     /**
-     * @param documentLanguage the language the document declared, applied when the script carries no scriptFormat
+     * A script read while parsing a document: one without a scriptFormat of its own is in the document's language.
      */
-    public static DroolsAction extractScript(Element xmlNode, String documentLanguage) {
+    public static DroolsAction extractScript(Parser parser, Element xmlNode) {
+        return extractScript(xmlNode, DefinitionsHandler.documentLanguageOr(parser, ExpressionLanguages.DEFAULT),
+                parser.getClassLoader() != null ? parser.getClassLoader() : JbpmClassLoaderUtil.findClassLoader());
+    }
+
+    private static DroolsAction extractScript(Element xmlNode, String defaultLanguage, ClassLoader classLoader) {
         String scriptFormat = xmlNode.getAttribute("scriptFormat");
         String dialect;
-        if (ExpressionLanguages.JAVA_LANGUAGE.equals(scriptFormat)) {
-            dialect = "java";
-        } else if (ExpressionLanguages.isFeel(scriptFormat)) {
-            dialect = ExpressionLanguages.FEEL;
-        } else if ((scriptFormat == null || scriptFormat.isEmpty()) && ExpressionLanguages.isFeel(documentLanguage)) {
-            dialect = ExpressionLanguages.FEEL;
+        if (scriptFormat == null || scriptFormat.isEmpty()) {
+            dialect = defaultLanguage;
         } else {
-            // MVEL, as before: anything that is not Java or FEEL, including a script with no scriptFormat at all
-            dialect = ExpressionLanguages.MVEL;
+            dialect = ExpressionLanguages.find(scriptFormat, classLoader)
+                    .map(ExpressionLanguage::id)
+                    .orElseThrow(() -> new ProcessParsingValidationException(String.format(
+                            "Unknown expression language '%s'; %s. A language is made available by adding the module that provides it to the application.",
+                            scriptFormat, ExpressionLanguages.describeAvailable(classLoader))));
         }
         NodeList subNodeList = xmlNode.getChildNodes();
         for (int j = 0; j < subNodeList.getLength(); j++) {
@@ -345,8 +352,8 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
                 xmlDump.append(" name=\"" + name + "\"");
             }
             String dialect = consequenceAction.getDialect();
-            if (JavaDialect.ID.equals(dialect)) {
-                xmlDump.append(" scriptFormat=\"" + XmlBPMNProcessDumper.JAVA_LANGUAGE + "\"");
+            if (dialect != null) {
+                xmlDump.append(" scriptFormat=\"" + XmlBPMNProcessDumper.uriOf(dialect) + "\"");
             }
             String consequence = consequenceAction.getConsequence();
             if (consequence != null) {
@@ -595,20 +602,14 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         if (element.isEmpty()) {
             return null;
         }
-        String lang = element.get().getAttribute("language");
-        if ((lang == null || lang.isBlank()) && DefinitionsHandler.isFeelDocument(parser)) {
-            lang = ExpressionLanguages.FEEL;
-        }
+        String declared = element.get().getAttribute("language");
+        String lang = declared == null || declared.isBlank()
+                ? DefinitionsHandler.documentLanguageOr(parser, ExpressionLanguages.DEFAULT)
+                : DefinitionsHandler.languageId(parser, declared);
         String expression = element.get().getTextContent();
 
-        // a transformation produces a value of any type, unlike a condition
-        ReturnValueEvaluator evaluator = null;
-        if (ExpressionLanguages.isFeel(lang)) {
-            evaluator = new FeelReturnValueEvaluator(expression, Object.class);
-        } else if (lang.toLowerCase().contains("mvel")) {
-            evaluator = new MVELInterpretedReturnValueEvaluator(expression);
-        }
-        return new Transformation(lang, expression, evaluator);
+        // a transformation produces a value of any type, unlike a condition; the language is asked when it runs
+        return new Transformation(lang, expression, new DeferredReturnValueEvaluator(lang, expression, Object.class));
     }
 
     protected List<DataDefinition> readSources(org.w3c.dom.Node parent, Function<String, DataDefinition> variableResolver) {
@@ -638,21 +639,21 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         readChildrenElementsByTag(parent, "assignment").forEach(element -> {
             Optional<Element> from = readSingleChildElementByTag(element, "from");
             Optional<Element> to = readSingleChildElementByTag(element, "to");
-            String language = element.getAttribute("expressionLanguage");
-            if (language == null || language.isEmpty()) {
-                language = element.getAttribute("language");
+            String declared = element.getAttribute("expressionLanguage");
+            if (declared == null || declared.isEmpty()) {
+                declared = element.getAttribute("language");
             }
-            if (language.isEmpty() && ExpressionLanguages.isFeel(documentLanguage)) {
-                // no language of its own: follow the document default. Only FEEL is propagated - an MVEL document
-                // leaves the dialect unset, which is what the assignment heuristics below already expect.
-                language = ExpressionLanguages.FEEL;
-            }
+            // an assignment with no language of its own is resolved against the document when it runs, so its
+            // dialect stays unset; which language that is only matters here for deciding the kind of assignment
+            String language = declared.isEmpty() ? null : DefinitionsHandler.languageId(parser, declared);
+            String effective = language != null ? language : documentLanguage;
             String source = from.get().getTextContent();
             String sourceId = from.get().getAttribute("id");
             String target = to.get().getTextContent();
             String targetId = to.get().getAttribute("id");
-            if (!language.isEmpty() && !ExpressionLanguages.isFeel(language)) {
-                assignments.add(new Assignment(language, toDataExpression(sourceId, source), toDataExpression(targetId, target)));
+            if (effective != null && DefinitionsHandler.language(parser, effective).supports(ExpressionLanguage.Surface.ASSIGNMENT)) {
+                // the language takes the whole assignment: source and target are both expressions in it
+                assignments.add(new Assignment(effective, toDataExpression(sourceId, source), toDataExpression(targetId, target)));
             } else {
                 source = cleanUp(source);
                 target = cleanUp(target);
@@ -665,7 +666,7 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
                     targetDataSpec = toDataExpression(targetId, target);
                 }
                 logger.debug("Applying assignment heuristics for {} to {} with language '{}'", sourceDataSpec, targetDataSpec, language);
-                assignments.add(new Assignment(language.isEmpty() ? null : language, sourceDataSpec, targetDataSpec));
+                assignments.add(new Assignment(language, sourceDataSpec, targetDataSpec));
             }
         });
         return assignments;
@@ -802,13 +803,12 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
         }
         // this is just an expression
         ReturnValueEvaluator evaluator = null;
-        String completionConditionLang = multiInstanceSpecification.getCompletionConditionLang();
         if (multiInstanceSpecification.getCompletionCondition() != null) {
-            if (ExpressionLanguages.isFeel(completionConditionLang)) {
-                evaluator = new FeelReturnValueEvaluator(multiInstanceSpecification.getCompletionCondition());
-            } else if (ExpressionLanguages.isMvel(completionConditionLang) || completionConditionLang == null) {
-                evaluator = new MVELInterpretedReturnValueEvaluator(multiInstanceSpecification.getCompletionCondition());
-            }
+            // the language was resolved when the specification was read, against the document; it is asked for the
+            // evaluator when the condition runs
+            String lang = multiInstanceSpecification.getCompletionConditionLang();
+            evaluator = new DeferredReturnValueEvaluator(lang == null || lang.isBlank() ? ExpressionLanguages.DEFAULT : lang,
+                    multiInstanceSpecification.getCompletionCondition(), Boolean.class);
         }
         forEachNode.setCompletionConditionExpression(evaluator);
         forEachNode.setMultiInstanceSpecification(multiInstanceSpecification);
@@ -876,14 +876,14 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
             }
         });
 
-        String documentLanguage = DefinitionsHandler.documentExpressionLanguage(parser);
         readSingleChildElementByTag(multiInstanceNode, COMPLETION_CONDITION).ifPresent(completeCondition -> {
             String completion = completeCondition.getTextContent();
             if (completion != null && !completion.isEmpty()) {
                 multiInstanceSpecification.setCompletionCondition(completion);
                 String language = completeCondition.getAttribute("language");
-                multiInstanceSpecification.setCompletionConditionLang(
-                        (language == null || language.isBlank()) && ExpressionLanguages.isFeel(documentLanguage) ? ExpressionLanguages.FEEL : language);
+                multiInstanceSpecification.setCompletionConditionLang(language == null || language.isBlank()
+                        ? DefinitionsHandler.documentLanguageOr(parser, ExpressionLanguages.DEFAULT)
+                        : DefinitionsHandler.languageId(parser, language));
             }
         });
         return multiInstanceSpecification;

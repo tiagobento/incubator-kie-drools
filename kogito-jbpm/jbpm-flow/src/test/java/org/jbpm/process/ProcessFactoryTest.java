@@ -18,9 +18,14 @@
  */
 package org.jbpm.process;
 
+import org.jbpm.process.expression.ExpressionLanguage;
+import org.jbpm.process.expression.ExpressionLanguages;
 import org.jbpm.ruleflow.core.RuleFlowProcessFactory;
 import org.jbpm.ruleflow.core.WorkflowElementIdentifierFactory;
 import org.jbpm.test.util.AbstractBaseTest;
+import org.jbpm.test.util.TestJavaLanguage;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.kie.api.definition.process.WorkflowElementIdentifier;
 import org.slf4j.LoggerFactory;
@@ -32,6 +37,19 @@ public class ProcessFactoryTest extends AbstractBaseTest {
     private static WorkflowElementIdentifier three = WorkflowElementIdentifierFactory.fromExternalFormat("three");
     private static WorkflowElementIdentifier four = WorkflowElementIdentifierFactory.fromExternalFormat("four");
     private static WorkflowElementIdentifier five = WorkflowElementIdentifierFactory.fromExternalFormat("five");
+
+    // the scripts below are declared in Java; validating them needs the language to be known, nothing more
+    private static final ExpressionLanguage JAVA = new TestJavaLanguage();
+
+    @BeforeAll
+    static void registerJava() {
+        ExpressionLanguages.register(JAVA);
+    }
+
+    @AfterAll
+    static void unregisterJava() {
+        ExpressionLanguages.unregister(JAVA);
+    }
 
     public void addLogger() {
         logger = LoggerFactory.getLogger(this.getClass());

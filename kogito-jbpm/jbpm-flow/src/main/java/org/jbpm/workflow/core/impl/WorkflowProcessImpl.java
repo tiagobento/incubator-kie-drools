@@ -28,17 +28,14 @@ import java.util.regex.Matcher;
 
 import org.jbpm.process.core.correlation.CorrelationManager;
 import org.jbpm.process.core.impl.ProcessImpl;
+import org.jbpm.process.expression.ExpressionScope;
 import org.jbpm.process.instance.ProcessInstance;
-import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
-import org.jbpm.util.ContextFactory;
 import org.jbpm.util.PatternConstants;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.WorkflowModelValidator;
 import org.jbpm.workflow.core.WorkflowProcess;
 import org.jbpm.workflow.core.node.StartNode;
-import org.jbpm.workflow.instance.WorkflowProcessInstance;
 import org.jbpm.workflow.instance.impl.InterpolationEvaluator;
-import org.jbpm.workflow.instance.impl.ProcessInstanceResolverFactory;
 import org.kie.api.definition.process.NodeContainer;
 import org.kie.api.definition.process.WorkflowElementIdentifier;
 import org.kie.kogito.internal.process.runtime.KogitoProcessInstance;
@@ -71,8 +68,7 @@ public class WorkflowProcessImpl extends ProcessImpl implements WorkflowProcess,
             if (replacements.get(paramName) == null) {
                 try {
                     Object resolved = InterpolationEvaluator.evaluate(getExpressionLanguage(), paramName,
-                            () -> new ProcessInstanceResolverFactory(((WorkflowProcessInstance) p)),
-                            () -> BpmnFeelVariables.forInterpolation(ContextFactory.fromProcessInstance((KogitoProcessInstance) p)));
+                            ExpressionScope.of((KogitoProcessInstance) p));
                     replacements.put(paramName, resolved == null ? null : resolved.toString());
                 } catch (Exception t) {
                     logger.error("Could not resolve, parameter {} while evaluating expression {}", paramName, expression, t);

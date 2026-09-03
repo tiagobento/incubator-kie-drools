@@ -46,6 +46,26 @@
             <artifactId>jbpm-bpmn2</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.kie.kogito</groupId>
+            <artifactId>jbpm-expressions-java</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.kie.kogito</groupId>
+            <artifactId>jbpm-expressions-mvel</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.kie.kogito</groupId>
+            <artifactId>jbpm-expressions-feel</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.kie.kogito</groupId>
+            <artifactId>jbpm-expressions-xpath</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.apache.maven</groupId>
             <artifactId>maven-plugin-api</artifactId>
             <scope>provided</scope>

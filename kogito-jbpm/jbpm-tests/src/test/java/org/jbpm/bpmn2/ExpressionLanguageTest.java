@@ -35,8 +35,6 @@ import org.jbpm.bpmn2.feel.FeelTimerModel;
 import org.jbpm.bpmn2.feel.FeelTimerProcess;
 import org.jbpm.bpmn2.feel.FeelTypedVariablesModel;
 import org.jbpm.bpmn2.feel.FeelTypedVariablesProcess;
-import org.jbpm.bpmn2.feel.UnknownExpressionLanguageModel;
-import org.jbpm.bpmn2.feel.UnknownExpressionLanguageProcess;
 import org.jbpm.bpmn2.xml.XmlBPMNProcessDumper;
 import org.jbpm.process.workitem.builtin.SystemOutWorkItemHandler;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
@@ -50,13 +48,14 @@ import org.kie.kogito.process.ProcessInstance;
 import org.kie.kogito.process.workitems.impl.DefaultKogitoWorkItemHandler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.catchThrowable;
 
 /**
  * How a BPMN document decides which language an expression is written in.
  *
  * A field's own language wins; a field that declares none follows
- * <code>&lt;definitions expressionLanguage&gt;</code>; and a document that declares nothing, or something we do not
- * recognise, keeps the behaviour it has always had.
+ * <code>&lt;definitions expressionLanguage&gt;</code>; a document that declares nothing keeps the behaviour it has
+ * always had; and a document naming a language the application does not carry is refused.
  */
 public class ExpressionLanguageTest extends JbpmBpmn2TestCase {
 
@@ -82,17 +81,21 @@ public class ExpressionLanguageTest extends JbpmBpmn2TestCase {
     }
 
     @Test
-    public void testAnUnrecognisedDocumentLanguageBehavesAsMvel() {
-        Application app = ProcessTestHelper.newApplication();
-        org.kie.kogito.process.Process<UnknownExpressionLanguageModel> process = UnknownExpressionLanguageProcess.newProcess(app);
-
-        UnknownExpressionLanguageModel model = process.createModel();
-        model.setScore(10);
-        ProcessInstance<UnknownExpressionLanguageModel> instance = process.createInstance(model);
-        instance.start();
-
-        assertThat(instance.status()).isEqualTo(ProcessInstance.STATE_COMPLETED);
-        assertThat(instance.variables().getPath()).isEqualTo("hit");
+    public void testADocumentNamingALanguageThatIsNotAvailableIsRefused() {
+        // a language is available when the module providing it is on the classpath; this one has no module, so the
+        // document fails to parse and the message says what would have been accepted
+        Throwable failure = catchThrowable(() -> createKogitoProcessRuntime("org/jbpm/bpmn2/feel/BPMN2-UnknownExpressionLanguage.bpmn2"));
+        assertThat(failure).isNotNull();
+        StringBuilder messages = new StringBuilder();
+        for (Throwable t = failure; t != null; t = t.getCause()) {
+            messages.append(t.getMessage()).append('\n');
+        }
+        assertThat(messages.toString())
+                .contains("Unknown expression language 'http://example.org/not-a-language'")
+                .contains("mvel (http://www.mvel.org/2.0)")
+                .contains("FEEL (http://www.omg.org/spec/DMN/20180521/FEEL/)")
+                .contains("java (http://www.java.com/java)")
+                .contains("XPath (http://www.w3.org/1999/XPath)");
     }
 
     @Test
@@ -135,21 +138,25 @@ public class ExpressionLanguageTest extends JbpmBpmn2TestCase {
         assertThat(XmlBPMNProcessDumper.INSTANCE.dump(feelProcess))
                 .contains("expressionLanguage=\"" + XmlBPMNProcessDumper.DMN_FEEL_LANGUAGE + "\"");
 
-        kruntime = createKogitoProcessRuntime("org/jbpm/bpmn2/feel/BPMN2-UnknownExpressionLanguage.bpmn2");
-        WorkflowProcess mvelProcess = (WorkflowProcess) kruntime.getKieBase().getProcess("UnknownExpressionLanguage");
+        kruntime = createKogitoProcessRuntime("org/jbpm/bpmn2/flow/BPMN2-ExclusiveSplit.bpmn2");
+        WorkflowProcess mvelProcess = (WorkflowProcess) kruntime.getKieBase().getProcess("ExclusiveSplit");
         assertThat(XmlBPMNProcessDumper.INSTANCE.dump(mvelProcess))
                 .contains("expressionLanguage=\"" + XmlBPMNProcessDumper.MVEL_LANGUAGE + "\"");
     }
 
     @Test
-    public void testTheDocumentLanguageIsStoredOnlyWhenItIsFeel() throws Exception {
-        // MVEL stays null, so nothing downstream sees a new value for the documents that already declare it
+    public void testTheDocumentLanguageIsStoredAsTheIdOfTheLanguageItNames() throws Exception {
         kruntime = createKogitoProcessRuntime("org/jbpm/bpmn2/feel/BPMN2-FeelScriptTask.bpmn2");
         assertThat(((WorkflowProcess) kruntime.getKieBase().getProcess("FeelScriptTask")).getExpressionLanguage())
                 .isEqualTo("FEEL");
 
-        kruntime = createKogitoProcessRuntime("org/jbpm/bpmn2/feel/BPMN2-UnknownExpressionLanguage.bpmn2");
-        assertThat(((WorkflowProcess) kruntime.getKieBase().getProcess("UnknownExpressionLanguage")).getExpressionLanguage())
+        kruntime = createKogitoProcessRuntime("org/jbpm/bpmn2/flow/BPMN2-ExclusiveSplit.bpmn2");
+        assertThat(((WorkflowProcess) kruntime.getKieBase().getProcess("ExclusiveSplit")).getExpressionLanguage())
+                .isEqualTo("mvel");
+
+        // a document that declares nothing stores nothing, and is read as MVEL wherever the language matters
+        kruntime = createKogitoProcessRuntime("org/jbpm/bpmn2/flow/BPMN2-BooleanStructureRef.bpmn2");
+        assertThat(((WorkflowProcess) kruntime.getKieBase().getProcess("BooleanStructureRef")).getExpressionLanguage())
                 .isNull();
     }
 

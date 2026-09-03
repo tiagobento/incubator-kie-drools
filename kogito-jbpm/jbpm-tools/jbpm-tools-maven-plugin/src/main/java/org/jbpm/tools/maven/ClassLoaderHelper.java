@@ -21,7 +21,8 @@ package org.jbpm.tools.maven;
 import java.io.File;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -32,23 +33,29 @@ import org.slf4j.LoggerFactory;
 public class ClassLoaderHelper {
     private static Logger LOGGER = LoggerFactory.getLogger(ClassLoaderHelper.class);
 
-    public static ClassLoader getClassLoader(MavenProject project) {
+    /**
+     * A class loader over the project's classes and its dependencies - the expression languages a document may use
+     * are among the latter - falling back to the plugin's own when the project's classpath cannot be resolved.
+     *
+     * @param test whether the test classpath is meant, for documents generated into the test sources
+     */
+    public static ClassLoader getClassLoader(MavenProject project, boolean test) {
         ClassLoader contextClassLoader = Thread.currentThread().getContextClassLoader();
         try {
+            Set<URL> classPathUrls = new LinkedHashSet<>();
 
-            Set<URL> classPathUrls = new HashSet<>();
-
+            List<String> classpathElements = new ArrayList<>(test ? project.getTestClasspathElements() : project.getCompileClasspathElements());
             // adding the projects classes itself
-            List<String> classpathElements = project.getCompileClasspathElements();
             classpathElements.add(project.getBuild().getOutputDirectory());
             classpathElements.add(project.getBuild().getTestOutputDirectory());
             for (final String classpathElement : classpathElements) {
-                LOGGER.info("adding classpath element {} to classloader", classpathElement);
+                LOGGER.debug("adding classpath element {} to classloader", classpathElement);
                 classPathUrls.add(new File(classpathElement).toURI().toURL());
             }
 
             return new URLClassLoader(classPathUrls.stream().toArray(URL[]::new), contextClassLoader);
         } catch (final Exception e) {
+            LOGGER.warn("Could not resolve the project classpath, using the plugin's own: {}", e.getMessage());
             return contextClassLoader;
         }
     }

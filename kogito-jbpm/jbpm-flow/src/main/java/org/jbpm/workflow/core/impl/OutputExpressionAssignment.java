@@ -18,54 +18,51 @@
  */
 package org.jbpm.workflow.core.impl;
 
-import java.io.Serializable;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 
+import org.jbpm.process.expression.ExpressionLanguage;
+import org.jbpm.process.expression.ExpressionLanguages;
+import org.jbpm.process.expression.ExpressionScope;
 import org.jbpm.process.instance.impl.AssignmentAction;
 import org.jbpm.process.instance.impl.AssignmentProducer;
 import org.jbpm.util.PatternConstants;
-import org.jbpm.workflow.instance.impl.MVELProcessHelper;
-import org.mvel2.integration.VariableResolver;
-import org.mvel2.integration.impl.ImmutableDefaultFactory;
-import org.mvel2.integration.impl.SimpleValueResolver;
+import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
 
+/**
+ * An assignment whose target is a <code>#{...}</code> naming a place to write, such as <code>#{person.name}</code>.
+ * The write is done by the assignment's language - the one it declared, else the document's - and what it wrote is
+ * then produced under the target's id, as every language does for a bare variable target.
+ */
 public class OutputExpressionAssignment implements AssignmentAction {
 
     private DataDefinition from;
-    private Serializable toCompiled;
     private DataDefinition to;
+    private String dialect;
+    private String target;
 
     public OutputExpressionAssignment(DataDefinition from, DataDefinition to) {
+        this(from, to, null);
+    }
+
+    public OutputExpressionAssignment(DataDefinition from, DataDefinition to, String dialect) {
         this.from = from;
         this.to = to;
+        this.dialect = dialect;
         Matcher matcher = PatternConstants.PARAMETER_MATCHER.matcher(this.to.getExpression());
-        if (matcher.find()) {
-            toCompiled = MVELProcessHelper.compileExpression(matcher.group(1) + " = _value");
-        }
+        this.target = matcher.find() ? matcher.group(1) : this.to.getExpression();
     }
 
     @Override
     public void execute(Function<String, Object> sourceResolver, Function<String, Object> targetResolver, AssignmentProducer producer) throws Exception {
-        // producer in this case is void
-        Object value = MVELProcessHelper.evaluator().executeExpression(toCompiled, new ImmutableDefaultFactory() {
-
-            @Override
-            public boolean isResolveable(String name) {
-                return targetResolver.apply(name) != null || name.equals("_value");
-            }
-
-            @Override
-            public VariableResolver getVariableResolver(String name) {
-                if ("_value".equals(name)) {
-                    return new SimpleValueResolver(sourceResolver.apply(from.getLabel()));
-                } else {
-                    return new SimpleValueResolver(targetResolver.apply(name));
-                }
-            }
-
-        });
-        producer.accept(to.getId(), value);
+        execute(null, sourceResolver, targetResolver, producer);
     }
 
+    @Override
+    public void execute(KogitoProcessContext context, Function<String, Object> sourceResolver, Function<String, Object> targetResolver, AssignmentProducer producer)
+            throws Exception {
+        ExpressionLanguage language = ExpressionLanguages.of(dialect, context);
+        Object value = language.assign(target, sourceResolver.apply(from.getLabel()), ExpressionScope.of(targetResolver, context));
+        producer.accept(to.getId(), value);
+    }
 }

@@ -79,6 +79,8 @@ public class ProcessCodeGenerationSupport {
 
     private Path rootOutputFolder;
 
+    private ClassLoader classLoader;
+
     public ProcessCodeGenerationSupport(Path sourceFolder, Path outputFolder, ClassLoader classLoader) {
         this.printer = new DefaultPrettyPrinter();
         this.bpmnSemanticModules = new SemanticModules();
@@ -88,9 +90,22 @@ public class ProcessCodeGenerationSupport {
         this.processCodeGenerator = new ProcessToExecModelGenerator("StaticProcessTemplate.java", classLoader);
         this.rootSourceFolder = sourceFolder;
         this.rootOutputFolder = outputFolder;
+        this.classLoader = classLoader;
     }
 
     public void execute() throws MojoExecutionException {
+        // the documents are parsed, validated and generated against the project's classpath: the expression
+        // languages they use are the project's dependencies, not this plugin's
+        ClassLoader previous = Thread.currentThread().getContextClassLoader();
+        Thread.currentThread().setContextClassLoader(classLoader);
+        try {
+            generate();
+        } finally {
+            Thread.currentThread().setContextClassLoader(previous);
+        }
+    }
+
+    private void generate() throws MojoExecutionException {
 
         try {
             if (!Files.exists(rootSourceFolder)) {
@@ -136,7 +151,7 @@ public class ProcessCodeGenerationSupport {
     private JavaCodeResult generateJavaCode(Path workflow) {
         FileSystemResource resource = new FileSystemResource(workflow.toFile());
         try (Reader reader = resource.getReader()) {
-            XmlProcessReader xmlReader = new XmlProcessReader(bpmnSemanticModules, Thread.currentThread().getContextClassLoader());
+            XmlProcessReader xmlReader = new XmlProcessReader(bpmnSemanticModules, classLoader);
             List<KogitoWorkflowProcess> processes = xmlReader.read(reader).stream().map(KogitoWorkflowProcess.class::cast).toList();
             for (KogitoWorkflowProcess process : processes) {
                 this.generateJavaCode(process);

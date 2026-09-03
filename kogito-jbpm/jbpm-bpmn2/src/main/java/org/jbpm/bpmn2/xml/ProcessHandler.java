@@ -61,8 +61,9 @@ import org.jbpm.process.core.correlation.CorrelationManager;
 import org.jbpm.process.core.event.EventFilter;
 import org.jbpm.process.core.event.EventTypeFilter;
 import org.jbpm.process.core.timer.Timer;
+import org.jbpm.process.expression.DeferredReturnValueEvaluator;
+import org.jbpm.process.expression.ExpressionLanguages;
 import org.jbpm.process.instance.impl.Action;
-import org.jbpm.process.instance.impl.MVELInterpretedReturnValueEvaluator;
 import org.jbpm.process.instance.impl.ReturnValueEvaluator;
 import org.jbpm.process.instance.impl.actions.CancelNodeInstanceAction;
 import org.jbpm.process.instance.impl.actions.ProcessInstanceCompensationAction;
@@ -247,10 +248,8 @@ public class ProcessHandler extends BaseAbstractHandler implements Handler {
                 List<CorrelationProperty> properties = key.getPropertiesRef().stream().map(k -> HandlerUtil.correlationProperties(parser).get(k)).collect(Collectors.toList());
                 for (CorrelationProperty correlationProperty : properties) {
                     correlationProperty.getMessageRefs().forEach(messageRef -> {
-
-                        // for now only MVEL expressions
-                        ReturnValueEvaluator evaluator = new MVELInterpretedReturnValueEvaluator(correlationProperty.getRetrievalExpression(messageRef).getScript());
-                        correlationManager.addMessagePropertyExpression(key.getId(), messageRef, correlationProperty.getId(), evaluator);
+                        Expression expression = correlationProperty.getRetrievalExpression(messageRef);
+                        correlationManager.addMessagePropertyExpression(key.getId(), messageRef, correlationProperty.getId(), correlationEvaluator(expression));
                     });
                 }
             }
@@ -260,11 +259,20 @@ public class ProcessHandler extends BaseAbstractHandler implements Handler {
         for (CorrelationSubscription subscription : HandlerUtil.correlationSubscription(process).values()) {
             correlationManager.subscribeTo(subscription.getCorrelationKeyRef());
             for (Map.Entry<String, Expression> binding : subscription.getPropertyExpressions().entrySet()) {
-
-                ReturnValueEvaluator evaluator = new MVELInterpretedReturnValueEvaluator(binding.getValue().getScript());
-                correlationManager.addProcessSubscriptionPropertyExpression(subscription.getCorrelationKeyRef(), binding.getKey(), evaluator);
+                correlationManager.addProcessSubscriptionPropertyExpression(subscription.getCorrelationKeyRef(), binding.getKey(), correlationEvaluator(binding.getValue()));
             }
         }
+    }
+
+    /**
+     * A correlation expression yields the value a property has for a message or a process. It is evaluated against
+     * the message rather than the process variables, which is a different thing from every other expression in the
+     * document, and the engine has only ever evaluated it in the default language - neither the document language
+     * nor the expression's own <code>language</code> attribute is applied, as before. Making correlation a surface
+     * of its own is a separate change.
+     */
+    private static ReturnValueEvaluator correlationEvaluator(Expression expression) {
+        return new DeferredReturnValueEvaluator(ExpressionLanguages.DEFAULT, expression.getScript(), Object.class);
     }
 
     public static void linkIntermediateLinks(NodeContainer process, List<IntermediateLink> links) {

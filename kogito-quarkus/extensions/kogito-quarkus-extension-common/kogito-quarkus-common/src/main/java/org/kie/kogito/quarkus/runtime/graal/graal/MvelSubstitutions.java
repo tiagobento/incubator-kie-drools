@@ -20,21 +20,36 @@ package org.kie.kogito.quarkus.runtime.graal.graal;
 
 import java.io.Serializable;
 import java.util.Map;
+import java.util.function.BooleanSupplier;
 
-import org.mvel2.MVEL;
 import org.mvel2.ParserContext;
 import org.mvel2.compiler.Accessor;
 import org.mvel2.integration.VariableResolverFactory;
-import org.mvel2.optimizers.impl.asm.ASMAccessorOptimizer;
 
 import com.oracle.svm.core.annotate.Substitute;
 import com.oracle.svm.core.annotate.TargetClass;
 
+/**
+ * MVEL cannot run in a native image. These substitutions make that a clear failure rather than an obscure one, and
+ * apply only when MVEL is on the classpath at all: an application that brought another expression language and left
+ * MVEL out carries none of this.
+ */
 final class MvelSubstitutions {
 
+    static final class IsMvelPresent implements BooleanSupplier {
+        @Override
+        public boolean getAsBoolean() {
+            try {
+                Class.forName("org.mvel2.MVEL", false, Thread.currentThread().getContextClassLoader());
+                return true;
+            } catch (ClassNotFoundException e) {
+                return false;
+            }
+        }
+    }
 }
 
-@TargetClass(MVEL.class)
+@TargetClass(className = "org.mvel2.MVEL", onlyWith = MvelSubstitutions.IsMvelPresent.class)
 final class MVEL_Target {
 
     private MVEL_Target() {
@@ -72,7 +87,7 @@ final class MVEL_Target {
     }
 }
 
-@TargetClass(ASMAccessorOptimizer.class)
+@TargetClass(className = "org.mvel2.optimizers.impl.asm.ASMAccessorOptimizer", onlyWith = MvelSubstitutions.IsMvelPresent.class)
 final class ASMAccessorOptimizer_Target {
 
     @Substitute

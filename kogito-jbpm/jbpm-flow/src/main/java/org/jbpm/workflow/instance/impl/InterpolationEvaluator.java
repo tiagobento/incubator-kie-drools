@@ -18,32 +18,28 @@
  */
 package org.jbpm.workflow.instance.impl;
 
-import java.util.Map;
-import java.util.function.Supplier;
-
-import org.jbpm.util.ExpressionLanguages;
-import org.mvel2.integration.VariableResolverFactory;
+import org.jbpm.process.expression.ExpressionLanguages;
+import org.jbpm.process.expression.ExpressionScope;
 
 /**
  * Evaluates the body of one <code>#{...}</code> placeholder in the language the document selected.
  *
  * Only this leaf changes between languages: the placeholder scanning, the single-placeholder object pass-through and
- * the concatenation fallback are shared by both, so a document that flips language keeps the same field semantics.
- *
- * The two scopes are supplied lazily because they are built differently and only one of them is ever needed - an MVEL
- * document must not pay for building a FEEL variable map, and vice versa.
+ * the concatenation fallback are shared by every caller, so a document that changes language keeps the same field
+ * semantics.
  */
 public final class InterpolationEvaluator {
 
     private InterpolationEvaluator() {
     }
 
-    public static Object evaluate(String language, String placeholderBody,
-            Supplier<VariableResolverFactory> mvelScope,
-            Supplier<Map<String, Object>> feelScope) {
-        if (ExpressionLanguages.isFeel(language)) {
-            return FeelInterpolation.evaluate(placeholderBody, feelScope.get());
-        }
-        return MVELProcessHelper.evaluator().eval(placeholderBody, mvelScope.get());
+    /**
+     * @param language the document's language, or <code>null</code> for the default
+     * @param placeholderBody what was between <code>#{</code> and <code>}</code>
+     * @param scope what the placeholder can see
+     */
+    public static Object evaluate(String language, String placeholderBody, ExpressionScope scope) {
+        return ExpressionLanguages.require(language == null || language.isBlank() ? ExpressionLanguages.DEFAULT : language)
+                .interpolate(placeholderBody, scope);
     }
 }

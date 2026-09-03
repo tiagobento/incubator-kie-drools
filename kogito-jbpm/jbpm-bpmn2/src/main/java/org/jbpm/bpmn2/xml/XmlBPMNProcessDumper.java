@@ -27,7 +27,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.drools.mvel.java.JavaDialect;
 import org.jbpm.bpmn2.core.Association;
 import org.jbpm.bpmn2.core.DataStore;
 import org.jbpm.bpmn2.core.Definitions;
@@ -49,8 +48,9 @@ import org.jbpm.process.core.event.EventFilter;
 import org.jbpm.process.core.event.EventTypeFilter;
 import org.jbpm.process.core.impl.ProcessImpl;
 import org.jbpm.process.core.impl.XmlProcessDumper;
+import org.jbpm.process.expression.ExpressionLanguage;
+import org.jbpm.process.expression.ExpressionLanguages;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
-import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Constraint;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.impl.ConnectionImpl;
@@ -78,13 +78,14 @@ import org.slf4j.LoggerFactory;
 
 public class XmlBPMNProcessDumper implements XmlProcessDumper {
 
-    public static final String JAVA_LANGUAGE = ExpressionLanguages.JAVA_LANGUAGE;
-    public static final String MVEL_LANGUAGE = ExpressionLanguages.MVEL_LANGUAGE;
-    public static final String RULE_LANGUAGE = ExpressionLanguages.RULE_LANGUAGE;
-    public static final String XPATH_LANGUAGE = ExpressionLanguages.XPATH_LANGUAGE;
-    public static final String FEEL_LANGUAGE = ExpressionLanguages.FEEL_LANGUAGE;
-    public static final String DMN_FEEL_LANGUAGE = ExpressionLanguages.DMN_FEEL_LANGUAGE;
-    public static final String FEEL_LANGUAGE_SHORT = ExpressionLanguages.FEEL_LANGUAGE_SHORT;
+    public static final String JAVA_LANGUAGE = "http://www.java.com/java";
+    public static final String MVEL_LANGUAGE = "http://www.mvel.org/2.0";
+    /** A rule pattern on a conditional event: matched against working memory, not an expression language. */
+    public static final String RULE_LANGUAGE = "http://www.jboss.org/drools/rule";
+    public static final String XPATH_LANGUAGE = "http://www.w3.org/1999/XPath";
+    public static final String FEEL_LANGUAGE = "http://www.omg.org/spec/FEEL/20140401";
+    public static final String DMN_FEEL_LANGUAGE = "http://www.omg.org/spec/DMN/20180521/FEEL/";
+    public static final String FEEL_LANGUAGE_SHORT = "application/feel";
 
     public static final int NO_META_DATA = 0;
     public static final int META_DATA_AS_NODE_PROPERTY = 1;
@@ -128,10 +129,15 @@ public class XmlBPMNProcessDumper implements XmlProcessDumper {
     private Set<String> visitedVariables;
 
     private static String expressionLanguage(WorkflowProcess process) {
-        String language = process instanceof org.jbpm.workflow.core.WorkflowProcess
-                ? ((org.jbpm.workflow.core.WorkflowProcess) process).getExpressionLanguage()
-                : null;
-        return ExpressionLanguages.isFeel(language) ? DMN_FEEL_LANGUAGE : MVEL_LANGUAGE;
+        return uriOf(ExpressionLanguages.languageOf(process));
+    }
+
+    /**
+     * The identifier a language is written back to a document under: its URI when the language is available, the
+     * dialect as stored otherwise.
+     */
+    public static String uriOf(String dialect) {
+        return ExpressionLanguages.find(dialect).map(ExpressionLanguage::uri).orElse(dialect);
     }
 
     protected void visitProcess(WorkflowProcess process, StringBuilder xmlDump, int metaDataType) {
@@ -781,12 +787,8 @@ public class XmlBPMNProcessDumper implements XmlProcessDumper {
                     xmlDump.append(">" + EOL +
                             "      <conditionExpression xsi:type=\"tFormalExpression\" ");
                     if ("code".equals(constraint.getType())) {
-                        if (JavaDialect.ID.equals(constraint.getDialect())) {
-                            xmlDump.append("language=\"" + JAVA_LANGUAGE + "\" ");
-                        } else if ("XPath".equals(constraint.getDialect())) {
-                            xmlDump.append("language=\"" + XPATH_LANGUAGE + "\" ");
-                        } else if ("FEEL".equals(constraint.getDialect())) {
-                            xmlDump.append("language=\"" + FEEL_LANGUAGE + "\" ");
+                        if (constraint.getDialect() != null) {
+                            xmlDump.append("language=\"" + uriOf(constraint.getDialect()) + "\" ");
                         }
                     } else {
                         xmlDump.append("language=\"" + RULE_LANGUAGE + "\" ");

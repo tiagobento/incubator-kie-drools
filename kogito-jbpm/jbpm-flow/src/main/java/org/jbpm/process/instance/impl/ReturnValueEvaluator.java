@@ -25,16 +25,19 @@ import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
 
 public interface ReturnValueEvaluator {
 
+    /** The dialect of an evaluator written in Java rather than built by a language: there is no expression to show. */
+    String FUNCTIONAL = "functional";
+
     default Class<?> type() {
         return Object.class;
     }
 
     default String dialect() {
-        return "functional";
+        return FUNCTIONAL;
     }
 
     default String expression() {
-        return "functional";
+        return FUNCTIONAL;
     }
 
     Object evaluate(KogitoProcessContext processContext);

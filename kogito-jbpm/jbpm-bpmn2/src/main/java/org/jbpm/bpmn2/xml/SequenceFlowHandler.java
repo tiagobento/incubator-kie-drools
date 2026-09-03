@@ -31,7 +31,6 @@ import org.jbpm.compiler.xml.Parser;
 import org.jbpm.compiler.xml.core.BaseAbstractHandler;
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
-import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.NodeContainer;
 import org.jbpm.workflow.core.node.CompositeNode;
@@ -130,23 +129,16 @@ public class SequenceFlowHandler extends BaseAbstractHandler implements Handler 
                         .getNamedItem("language");
                 if (languageNode != null) {
                     String language = languageNode.getNodeValue();
-                    if (XmlBPMNProcessDumper.JAVA_LANGUAGE.equals(language)) {
-                        sequenceFlow.setLanguage("java");
-                    } else if (XmlBPMNProcessDumper.MVEL_LANGUAGE.equals(language)) {
-                        sequenceFlow.setLanguage("mvel");
-                    } else if (XmlBPMNProcessDumper.RULE_LANGUAGE.equals(language)) {
+                    if (XmlBPMNProcessDumper.RULE_LANGUAGE.equals(language)) {
+                        // a rule pattern matched against working memory, not an expression
                         sequenceFlow.setType("rule");
-                    } else if (XmlBPMNProcessDumper.XPATH_LANGUAGE.equals(language)) {
-                        sequenceFlow.setLanguage("XPath");
-                    } else if (XmlBPMNProcessDumper.FEEL_LANGUAGE.equals(language) || XmlBPMNProcessDumper.DMN_FEEL_LANGUAGE.equals(language)) {
-                        sequenceFlow.setLanguage("FEEL");
                     } else {
-                        throw new ProcessParsingValidationException("Unknown language " + language);
+                        sequenceFlow.setLanguage(DefinitionsHandler.languageId(parser, language));
                     }
-                } else if (DefinitionsHandler.isFeelDocument(parser)) {
-                    // no language of its own: follow the document default. Otherwise the constraint keeps the MVEL
-                    // default it has always had.
-                    sequenceFlow.setLanguage(ExpressionLanguages.FEEL);
+                } else if (DefinitionsHandler.documentExpressionLanguage(parser) != null) {
+                    // no language of its own: follow the document. Otherwise the constraint keeps the default it has
+                    // always had.
+                    sequenceFlow.setLanguage(DefinitionsHandler.documentExpressionLanguage(parser));
                 }
                 sequenceFlow.setExpression(expression);
             }

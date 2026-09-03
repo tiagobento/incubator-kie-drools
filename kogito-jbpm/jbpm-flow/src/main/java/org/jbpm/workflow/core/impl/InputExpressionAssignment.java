@@ -21,19 +21,21 @@ package org.jbpm.workflow.core.impl;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
-import java.util.function.Supplier;
 import java.util.regex.Matcher;
 
+import org.jbpm.process.expression.ExpressionLanguage;
+import org.jbpm.process.expression.ExpressionLanguages;
+import org.jbpm.process.expression.ExpressionScope;
 import org.jbpm.process.instance.impl.AssignmentAction;
 import org.jbpm.process.instance.impl.AssignmentProducer;
-import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.jbpm.util.PatternConstants;
-import org.jbpm.workflow.instance.impl.InterpolationEvaluator;
 import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
-import org.mvel2.integration.VariableResolver;
-import org.mvel2.integration.impl.ImmutableDefaultFactory;
-import org.mvel2.integration.impl.SimpleValueResolver;
 
+/**
+ * An assignment whose source holds one or more <code>#{...}</code> placeholders. Each placeholder is evaluated in
+ * the assignment's language - the one it declared, else the document's - and a source that is one placeholder
+ * yields that value as is, while any other source is spliced together as a string.
+ */
 public class InputExpressionAssignment implements AssignmentAction {
 
     private DataDefinition from;
@@ -59,41 +61,24 @@ public class InputExpressionAssignment implements AssignmentAction {
     public void execute(KogitoProcessContext context, Function<String, Object> sourceResolver, Function<String, Object> targetResolver, AssignmentProducer producer)
             throws Exception {
         // producer in this case is void
-        ImmutableDefaultFactory immutableDefaultFactory = new ImmutableDefaultFactory() {
-
-            @Override
-            public boolean isResolveable(String name) {
-                return sourceResolver.apply(name) != null;
-            }
-
-            @Override
-            public VariableResolver getVariableResolver(String name) {
-                return new SimpleValueResolver(sourceResolver.apply(name));
-            }
-
-        };
-        producer.accept(to.getLabel(), evalInput(context, immutableDefaultFactory, from.getExpression()));
+        ExpressionLanguage language = ExpressionLanguages.of(dialect, context);
+        producer.accept(to.getLabel(), evalInput(language, ExpressionScope.of(sourceResolver, context), from.getExpression()));
     }
 
-    private Object evalInput(KogitoProcessContext context, ImmutableDefaultFactory factory, String expression) {
+    private Object evalInput(ExpressionLanguage language, ExpressionScope scope, String expression) {
         String outcome = expression;
         Matcher matcher = PatternConstants.PARAMETER_MATCHER.matcher(expression);
         Map<String, Object> values = new HashMap<>();
-        Supplier<Map<String, Object>> feelScope = () -> context == null ? Map.of() : BpmnFeelVariables.forInterpolation(context);
-        if (matcher.find()) {
-            matcher.reset();
-            while (matcher.find()) {
-                String paramName = matcher.group(1);
-                Object value = InterpolationEvaluator.evaluate(dialect, paramName, () -> factory, feelScope);
-                if (value != null) {
-                    values.put(paramName, value);
-                }
+        while (matcher.find()) {
+            String paramName = matcher.group(1);
+            Object value = language.interpolate(paramName, scope);
+            if (value != null) {
+                values.put(paramName, value);
             }
         }
         if (values.size() == 1) {
             return values.values().iterator().next();
         }
-
         for (Map.Entry<String, Object> entry : values.entrySet()) {
             outcome = outcome.replace("#{" + entry.getKey() + "}", entry.getValue().toString());
         }

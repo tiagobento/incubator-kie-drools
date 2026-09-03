@@ -42,7 +42,6 @@ import org.drools.drl.ast.descr.PackageDescr;
 import org.drools.drl.ast.descr.ProcessDescr;
 import org.drools.drl.parser.DroolsParserException;
 import org.drools.drl.parser.ParserError;
-import org.drools.mvel.java.JavaDialect;
 import org.jbpm.assembler.DuplicateProcess;
 import org.jbpm.compiler.xml.XmlProcessReader;
 import org.jbpm.compiler.xml.compiler.SemanticKnowledgeBuilderConfigurationImpl;
@@ -226,7 +225,8 @@ public class ProcessBuilderImpl implements org.drools.compiler.compiler.ProcessB
         if (!context.getErrors().isEmpty()) {
             this.errors.addAll(context.getErrors());
         }
-        ProcessDialectRegistry.getDialect(JavaDialect.ID).addProcess(context);
+        // the Java dialect compiles whatever the node builders queued; a process without Java has nothing to compile
+        ProcessDialectRegistry.find("java").ifPresent(dialect -> dialect.addProcess(context));
     }
 
     private void processNodes(

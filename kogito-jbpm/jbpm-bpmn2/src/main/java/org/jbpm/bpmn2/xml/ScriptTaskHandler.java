@@ -19,11 +19,8 @@
 package org.jbpm.bpmn2.xml;
 
 import java.util.HashMap;
-import java.util.Map;
 
-import org.drools.mvel.java.JavaDialect;
 import org.jbpm.compiler.xml.Parser;
-import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.impl.DroolsConsequenceAction;
 import org.jbpm.workflow.core.node.ActionNode;
@@ -33,17 +30,8 @@ import org.xml.sax.SAXException;
 
 public class ScriptTaskHandler extends AbstractNodeHandler {
 
-    private static Map<String, String> SUPPORTED_SCRIPT_FORMATS = new HashMap<>();
-
-    static {
-        SUPPORTED_SCRIPT_FORMATS.put(XmlBPMNProcessDumper.JAVA_LANGUAGE, JavaDialect.ID);
-        SUPPORTED_SCRIPT_FORMATS.put(XmlBPMNProcessDumper.FEEL_LANGUAGE, "FEEL");
-        SUPPORTED_SCRIPT_FORMATS.put(XmlBPMNProcessDumper.FEEL_LANGUAGE_SHORT, "FEEL");
-    }
-
-    public static void registerSupportedScriptFormat(String language, String dialect) {
-        SUPPORTED_SCRIPT_FORMATS.put(language, dialect);
-    }
+    /** The language a script task is in when neither it nor its document declares one. */
+    public static final String DEFAULT_SCRIPT_LANGUAGE = "java";
 
     protected Node createNode(Attributes attrs) {
         ActionNode result = new ActionNode();
@@ -92,17 +80,15 @@ public class ScriptTaskHandler extends AbstractNodeHandler {
     }
 
     /**
-     * A script task with no scriptFormat of its own follows the document language, so a FEEL document does not need to
-     * repeat the language on every script. Anything else keeps defaulting to Java, as it always has.
+     * A script task with a scriptFormat is in the language it names; one without follows the document language, so a
+     * document that selected a language does not repeat it on every script; and a document that selected none keeps
+     * defaulting to Java, as it always has.
      */
     private static String scriptDialect(Parser parser, String scriptFormat) {
         if (scriptFormat != null && !scriptFormat.isEmpty()) {
-            // every spelling of FEEL, including the DMN URI a document declares, not only the two registered below
-            return ExpressionLanguages.isFeel(scriptFormat)
-                    ? ExpressionLanguages.FEEL
-                    : SUPPORTED_SCRIPT_FORMATS.getOrDefault(scriptFormat, "java");
+            return DefinitionsHandler.languageId(parser, scriptFormat);
         }
-        return DefinitionsHandler.isFeelDocument(parser) ? ExpressionLanguages.FEEL : "java";
+        return DefinitionsHandler.documentLanguageOr(parser, DEFAULT_SCRIPT_LANGUAGE);
     }
 
     public void writeNode(Node node, StringBuilder xmlDump, int metaDataType) {

@@ -26,7 +26,6 @@ import org.jbpm.compiler.xml.Parser;
 import org.jbpm.compiler.xml.ProcessBuildData;
 import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
-import org.jbpm.util.ExpressionLanguages;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.node.DynamicNode;
 import org.w3c.dom.Element;
@@ -41,6 +40,9 @@ public class AdHocSubProcessHandler extends CompositeContextNodeHandler {
 
     protected static final List<String> AUTOCOMPLETE_EXPRESSIONS = Arrays.asList(
             "getActivityInstanceAttribute(\"numberOfActiveInstances\") == 0", AUTOCOMPLETE_COMPLETION_CONDITION);
+
+    /** The language an ad-hoc condition is in when neither it nor its document declares one. */
+    public static final String DEFAULT_CONDITION_LANGUAGE = "java";
 
     @Override
     protected Node createNode(Attributes attrs) {
@@ -68,7 +70,7 @@ public class AdHocSubProcessHandler extends CompositeContextNodeHandler {
         }
 
         // the default a condition keeps when it declares no language of its own
-        dynamicNode.setLanguage(DefinitionsHandler.isFeelDocument(parser) ? ExpressionLanguages.FEEL : ExpressionLanguages.JAVA_LANGUAGE);
+        dynamicNode.setLanguage(DefinitionsHandler.documentLanguageOr(parser, DEFAULT_CONDITION_LANGUAGE));
 
         // by default it should not autocomplete as it's adhoc
         org.w3c.dom.Node xmlNode = element.getFirstChild();
@@ -85,7 +87,7 @@ public class AdHocSubProcessHandler extends CompositeContextNodeHandler {
                 } else {
                     dynamicNode.setCompletionCondition(expression);
                     if (!dialect.isBlank()) {
-                        dynamicNode.setLanguage(dialect);
+                        dynamicNode.setLanguage(DefinitionsHandler.languageId(parser, dialect));
                     }
                 }
             }
@@ -118,7 +120,8 @@ public class AdHocSubProcessHandler extends CompositeContextNodeHandler {
         visitConnectionsAndAssociations(dynamicNode, xmlDump, metaDataType);
 
         if (dynamicNode.isAutoComplete()) {
-            xmlDump.append("<completionCondition xsi:type=\"tFormalExpression\" language=\"" + dynamicNode.getLanguage() + "\">" + AUTOCOMPLETE_COMPLETION_CONDITION + "</completionCondition>" + EOL);
+            xmlDump.append("<completionCondition xsi:type=\"tFormalExpression\" language=\"" + XmlBPMNProcessDumper.uriOf(dynamicNode.getLanguage()) + "\">" + AUTOCOMPLETE_COMPLETION_CONDITION
+                    + "</completionCondition>" + EOL);
         }
         endNode("adHocSubProcess", xmlDump);
     }

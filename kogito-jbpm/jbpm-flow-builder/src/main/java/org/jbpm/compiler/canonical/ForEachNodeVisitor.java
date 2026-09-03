@@ -23,6 +23,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import org.jbpm.process.core.context.variable.VariableScope;
+import org.jbpm.process.expression.ExpressionLanguage.Surface;
 import org.jbpm.ruleflow.core.factory.ForEachNodeFactory;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.impl.DataDefinition;
@@ -118,7 +119,7 @@ public class ForEachNodeVisitor extends AbstractCompositeNodeVisitor<ForEachNode
             String completionConditionDialect = node.getCompletionConditionExpression().dialect();
             String completionConditionExpression = node.getCompletionConditionExpression().expression();
             body.addStatement(getFactoryMethod(getNodeId(node), ForEachNodeFactory.METHOD_COMPLETE_CONDITION,
-                    getReturnValueEvaluatorBuilderService().build(node, completionConditionDialect, completionConditionExpression, Boolean.class, null)));
+                    getExpressions().evaluator(node, Surface.CONDITION, completionConditionDialect, completionConditionExpression, Boolean.class, null)));
         }
         visitConnections(getNodeId(node), filterNodes.toArray(new Node[filterNodes.size()]), body);
 

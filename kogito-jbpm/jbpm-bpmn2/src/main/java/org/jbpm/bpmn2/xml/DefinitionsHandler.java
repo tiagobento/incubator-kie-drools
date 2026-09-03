@@ -36,25 +36,24 @@ import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.process.core.datatype.DataType;
 import org.jbpm.process.core.datatype.DataTypeResolver;
 import org.jbpm.process.core.datatype.impl.type.UndefinedDataType;
+import org.jbpm.process.expression.ExpressionLanguage;
+import org.jbpm.process.expression.ExpressionLanguages;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
-import org.jbpm.util.ExpressionLanguages;
+import org.jbpm.util.JbpmClassLoaderUtil;
 import org.jbpm.workflow.core.NodeContainer;
 import org.jbpm.workflow.core.node.ForEachNode;
 import org.jbpm.workflow.core.node.WorkItemNode;
 import org.kie.api.definition.process.Node;
 import org.kie.api.definition.process.Process;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.w3c.dom.Element;
 import org.xml.sax.Attributes;
 import org.xml.sax.SAXException;
+import org.xml.sax.ext.Attributes2;
 
 public class DefinitionsHandler extends BaseAbstractHandler implements Handler {
 
     /** Key under which the document expression language is published to the node handlers while parsing. */
     public static final String EXPRESSION_LANGUAGE = "ExpressionLanguage";
-
-    private static final Logger logger = LoggerFactory.getLogger(DefinitionsHandler.class);
 
     @SuppressWarnings("unchecked")
     public DefinitionsHandler() {
@@ -75,12 +74,35 @@ public class DefinitionsHandler extends BaseAbstractHandler implements Handler {
             throws SAXException {
         parser.startElementBuilder(localName, attrs);
         // read before the children are parsed: node handlers need to know the document language while they read
-        ((ProcessBuildData) parser.getData()).setMetaData(EXPRESSION_LANGUAGE, readExpressionLanguage(attrs.getValue("expressionLanguage")));
+        ((ProcessBuildData) parser.getData()).setMetaData(EXPRESSION_LANGUAGE, readExpressionLanguage(parser, declaredExpressionLanguage(attrs)));
         return new Definitions();
     }
 
+    /** What the BPMN schema fills in for a document that declares no <code>expressionLanguage</code>. */
+    static final String SCHEMA_DEFAULT_EXPRESSION_LANGUAGE = "http://www.w3.org/1999/XPath";
+
     /**
-     * The expression language this document declared, or <code>null</code> for MVEL.
+     * The <code>expressionLanguage</code> the document wrote, or <code>null</code> when it wrote none.
+     *
+     * The BPMN 2.0 schema declares a default for the attribute, XPath, and a validating parser reports that default
+     * as if the document had written it. Here a document that says nothing has always meant the engine's default,
+     * so the schema's default is not taken as a choice: an attribute the parser can tell was filled in is ignored,
+     * and, for a parser that cannot tell, so is the schema's value itself.
+     */
+    private static String declaredExpressionLanguage(Attributes attrs) {
+        String declared = attrs.getValue("expressionLanguage");
+        if (declared == null) {
+            return null;
+        }
+        if (attrs instanceof Attributes2) {
+            int index = attrs.getIndex("expressionLanguage");
+            return index >= 0 && ((Attributes2) attrs).isSpecified(index) ? declared : null;
+        }
+        return SCHEMA_DEFAULT_EXPRESSION_LANGUAGE.equals(declared) ? null : declared;
+    }
+
+    /**
+     * The id of the expression language this document declared, or <code>null</code> when it declared none.
      *
      * Published to the node handlers while parsing, since a field that declares no language of its own follows it.
      */
@@ -89,32 +111,52 @@ public class DefinitionsHandler extends BaseAbstractHandler implements Handler {
     }
 
     /**
-     * Whether this document selected FEEL, for a field deciding whether to follow the document default.
+     * The language a field with no language of its own is in: the document's, else the fallback the field has always
+     * had.
+     *
+     * A document that declares the engine's own default declares nothing new, and is read exactly like one that
+     * declares nothing: its script tasks and ad-hoc conditions keep their own default, Java, as they always have in
+     * the many documents that say MVEL at the top and write their scripts in Java.
      */
-    public static boolean isFeelDocument(Parser parser) {
-        return ExpressionLanguages.isFeel(documentExpressionLanguage(parser));
+    public static String documentLanguageOr(Parser parser, String fallback) {
+        String declared = documentExpressionLanguage(parser);
+        return declared == null || declared.equalsIgnoreCase(ExpressionLanguages.DEFAULT) ? fallback : declared;
+    }
+
+    /**
+     * The id of the language a <code>language</code>, <code>scriptFormat</code> or <code>expressionLanguage</code>
+     * attribute names, or a parse failure naming the attribute value and the languages that are available. A
+     * language is available when the module providing it is on the classpath the document is parsed against, which
+     * is the application's: the parser is handed that class loader, and the thread's own may be a build tool's.
+     */
+    public static String languageId(Parser parser, String declared) {
+        ClassLoader classLoader = classLoader(parser);
+        return ExpressionLanguages.find(declared, classLoader)
+                .map(ExpressionLanguage::id)
+                .orElseThrow(() -> new ProcessParsingValidationException(String.format(
+                        "Unknown expression language '%s'; %s. A language is made available by adding the module that provides it to the application.",
+                        declared, ExpressionLanguages.describeAvailable(classLoader))));
+    }
+
+    /**
+     * The language with the given id, resolved against the class loader the document is parsed against.
+     */
+    public static ExpressionLanguage language(Parser parser, String id) {
+        return ExpressionLanguages.require(id, classLoader(parser));
+    }
+
+    private static ClassLoader classLoader(Parser parser) {
+        return parser.getClassLoader() != null ? parser.getClassLoader() : JbpmClassLoaderUtil.findClassLoader();
     }
 
     /**
      * The document-wide expression language, as BPMN 2.0 defines it on <code>&lt;definitions&gt;</code>.
-     *
-     * Only FEEL is stored: MVEL is the default and leaving it null keeps every existing document, and everything that
-     * reads the process expression language, exactly as it was. A language we do not recognise is reported and treated
-     * as MVEL, so a mistyped FEEL URI is visible rather than silently giving MVEL semantics.
      */
-    private static String readExpressionLanguage(String language) {
+    private static String readExpressionLanguage(Parser parser, String language) {
         if (language == null || language.isBlank()) {
             return null;
         }
-        if (ExpressionLanguages.isFeel(language)) {
-            return ExpressionLanguages.FEEL;
-        }
-        if (!ExpressionLanguages.isKnownDocumentLanguage(language)) {
-            logger.warn("Unknown expressionLanguage '{}' on <definitions>, MVEL will be used. Expected one of {}, {}, {} or {}.",
-                    language, ExpressionLanguages.MVEL_LANGUAGE, ExpressionLanguages.FEEL_LANGUAGE,
-                    ExpressionLanguages.DMN_FEEL_LANGUAGE, ExpressionLanguages.FEEL_LANGUAGE_SHORT);
-        }
-        return null;
+        return languageId(parser, language);
     }
 
     @Override

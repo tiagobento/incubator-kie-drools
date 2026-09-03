@@ -25,13 +25,14 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 
 import org.drools.core.common.InternalWorkingMemory;
+import org.jbpm.process.expression.ExpressionLanguages;
+import org.jbpm.process.expression.ExpressionScope;
 import org.jbpm.process.instance.InternalProcessRuntime;
 import org.jbpm.process.instance.ProcessInstance;
 import org.jbpm.util.PatternConstants;
 import org.jbpm.workflow.instance.WorkflowProcessInstance;
-import org.jbpm.workflow.instance.impl.MVELProcessHelper;
+import org.jbpm.workflow.instance.impl.InterpolationEvaluator;
 import org.jbpm.workflow.instance.impl.NodeInstanceImpl;
-import org.jbpm.workflow.instance.impl.ProcessInstanceResolverFactory;
 import org.jbpm.workflow.instance.impl.WorkflowProcessInstanceImpl;
 import org.kie.api.command.ExecutableCommand;
 import org.kie.api.definition.process.Process;
@@ -113,8 +114,8 @@ public class DynamicUtils {
                     variableValue = processInstance.getVariable(paramName);
                     if (variableValue == null) {
                         try {
-                            variableValue = MVELProcessHelper.evaluator().eval(paramName,
-                                    new ProcessInstanceResolverFactory(processInstance));
+                            variableValue = InterpolationEvaluator.evaluate(ExpressionLanguages.languageOf(processInstance.getProcess()), paramName,
+                                    ExpressionScope.of(processInstance));
                         } catch (Exception t) {
                             logger.error("Could not find variable scope for variable {}",
                                     paramName);

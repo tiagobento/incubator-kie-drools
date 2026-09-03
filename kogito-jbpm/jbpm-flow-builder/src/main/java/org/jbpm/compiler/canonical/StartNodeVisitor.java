@@ -22,10 +22,10 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
 
-import org.jbpm.compiler.canonical.builtin.ReturnValueEvaluatorBuilderService;
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.process.core.timer.Timer;
+import org.jbpm.process.expression.ExpressionLanguage.Surface;
 import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.ruleflow.core.factory.StartNodeFactory;
 import org.jbpm.workflow.core.node.EventSubProcessNode;
@@ -48,11 +48,8 @@ import static org.jbpm.ruleflow.core.factory.StartNodeFactory.METHOD_TRIGGER;
 
 public class StartNodeVisitor extends AbstractNodeVisitor<StartNode> {
 
-    private ReturnValueEvaluatorBuilderService returnValueEvaluatorBuilderService;
-
     public StartNodeVisitor(ClassLoader classLoader) {
         super(classLoader);
-        this.returnValueEvaluatorBuilderService = ReturnValueEvaluatorBuilderService.instance(classLoader);
     }
 
     @Override
@@ -120,8 +117,8 @@ public class StartNodeVisitor extends AbstractNodeVisitor<StartNode> {
         arguments.add(new StringLiteralExpr((String) nodeMetaData.get(TRIGGER_REF)));
         arguments.add(buildDataAssociationsExpression(startNode, startNode.getIoSpecification().getDataOutputAssociation()));
         if (nodeMetaData.containsKey(TRIGGER_EXPRESSION)) {
-            arguments.add(returnValueEvaluatorBuilderService.build(startNode, (String) nodeMetaData.get(Metadata.TRIGGER_EXPRESSION_LANGUAGE), (String) nodeMetaData.get(TRIGGER_EXPRESSION),
-                    Boolean.class, null));
+            arguments.add(getExpressions().evaluator(startNode, Surface.CONDITION, (String) nodeMetaData.get(Metadata.TRIGGER_EXPRESSION_LANGUAGE),
+                    (String) nodeMetaData.get(TRIGGER_EXPRESSION), Boolean.class, null));
         }
         body.addStatement(getFactoryMethod(getNodeId(startNode), METHOD_TRIGGER, arguments.toArray(Expression[]::new)));
     }

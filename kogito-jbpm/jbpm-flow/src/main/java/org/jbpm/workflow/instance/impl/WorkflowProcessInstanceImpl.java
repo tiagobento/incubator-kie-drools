@@ -41,7 +41,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.drools.core.common.InternalKnowledgeRuntime;
-import org.drools.mvel.MVELSafeHelper;
 import org.jbpm.process.core.ContextContainer;
 import org.jbpm.process.core.ContextResolver;
 import org.jbpm.process.core.context.exception.CompensationScope;
@@ -49,11 +48,11 @@ import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.process.core.timer.DateTimeUtils;
 import org.jbpm.process.core.timer.Timer;
+import org.jbpm.process.expression.ExpressionScope;
 import org.jbpm.process.instance.ContextInstance;
 import org.jbpm.process.instance.InternalProcessRuntime;
 import org.jbpm.process.instance.context.variable.VariableScopeInstance;
 import org.jbpm.process.instance.impl.ProcessInstanceImpl;
-import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.ruleflow.core.WorkflowElementIdentifierFactory;
 import org.jbpm.util.ContextFactory;
@@ -112,8 +111,6 @@ import org.kie.kogito.process.flexible.AdHocFragment;
 import org.kie.kogito.process.flexible.ItemDescription;
 import org.kie.kogito.process.flexible.Milestone;
 import org.kie.kogito.timer.TimerInstance;
-import org.mvel2.integration.VariableResolverFactory;
-import org.mvel2.integration.impl.ImmutableDefaultFactory;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -797,7 +794,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
                 if (nodeInstances != null && !nodeInstances.isEmpty()) {
                     StringBuilder st = new StringBuilder();
                     for (org.kie.api.runtime.process.NodeInstance ni : nodeInstances) {
-                        Object result = resolveExpressionVariable(varExpresion, new NodeInstanceResolverFactory((NodeInstance) ni));
+                        Object result = resolveExpressionVariable(varExpresion, ExpressionScope.of((NodeInstance) ni));
                         st.append(result).append("###");
                     }
                     return st.toString();
@@ -823,18 +820,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
                 if (value != null) {
                     return value;
                 }
-                VariableResolverFactory resolverFactory = new ImmutableDefaultFactory() {
-                    @Override
-                    public boolean isResolveable(String varName) {
-                        return getScopedVariable.apply(varName) != null;
-                    }
-
-                    @Override
-                    public org.mvel2.integration.VariableResolver getVariableResolver(String varName) {
-                        return new org.mvel2.integration.impl.SimpleValueResolver(getScopedVariable.apply(varName));
-                    }
-                };
-                return resolveExpressionVariable(varExpresion, resolverFactory).orElse(null);
+                return resolveExpressionVariable(varExpresion, ExpressionScope.of(getScopedVariable, ContextFactory.fromProcessInstance(this))).orElse(null);
             };
         } else if (node instanceof ForEachNode) {
             return (varExpression) -> {
@@ -848,7 +834,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
                             .map(e -> (CompositeContextNodeInstance) e).collect(Collectors.toList());
                     List<Object> outcome = new ArrayList<>();
                     for (CompositeContextNodeInstance nodeInstance : data) {
-                        Object resolvedValue = resolveExpressionVariable(varExpression, new NodeInstanceResolverFactory(nodeInstance)).orElse(null);
+                        Object resolvedValue = resolveExpressionVariable(varExpression, ExpressionScope.of(nodeInstance)).orElse(null);
                         if (resolvedValue != null) {
                             outcome.add(resolvedValue);
                         }
@@ -860,7 +846,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
             };
         } else if (node instanceof EventSubProcessNode || node instanceof StateNode) {
             return (varName) -> {
-                return resolveExpressionVariable(varName, new ProcessInstanceResolverFactory(this)).orElse(null);
+                return resolveExpressionVariable(varName, ExpressionScope.of(this)).orElse(null);
             };
         } else if (node instanceof CompositeContextNode) {
             return (varExpression) -> {
@@ -868,7 +854,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
                 List<Object> outcome = new ArrayList<>();
                 if (nodeInstances != null && !nodeInstances.isEmpty()) {
                     for (org.kie.api.runtime.process.NodeInstance nodeInstance : nodeInstances) {
-                        Object resolvedValue = resolveExpressionVariable(varExpression, new NodeInstanceResolverFactory((NodeInstance) nodeInstance)).orElse(null);
+                        Object resolvedValue = resolveExpressionVariable(varExpression, ExpressionScope.of((NodeInstance) nodeInstance)).orElse(null);
                         if (resolvedValue != null) {
                             outcome.add(resolvedValue);
                         }
@@ -878,7 +864,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
             };
         } else {
             return (varName) -> {
-                return resolveExpressionVariable(varName, new ProcessInstanceResolverFactory(this)).orElse(null);
+                return resolveExpressionVariable(varName, ExpressionScope.of(this)).orElse(null);
             };
         }
     }
@@ -895,13 +881,13 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
         return null;
     }
 
-    private Optional<Object> resolveExpressionVariable(String paramName, VariableResolverFactory factory) {
+    private Optional<Object> resolveExpressionVariable(String paramName, ExpressionScope scope) {
         try {
             // just in case is not an expression
-            if (factory.isResolveable(paramName)) {
-                return Optional.of(factory.getVariableResolver(paramName).getValue());
+            if (scope.has(paramName)) {
+                return Optional.of(scope.get(paramName));
             }
-            return Optional.ofNullable(MVELSafeHelper.getEvaluator().eval(paramName, factory));
+            return Optional.ofNullable(InterpolationEvaluator.evaluate(expressionLanguage(), paramName, scope));
         } catch (Throwable t) {
             logger.error("Could not find variable scope for variable {}", paramName);
             return Optional.empty();
@@ -922,7 +908,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
     }
 
     private Object resolveVariable(String s) {
-        return resolveVariable(s, new ProcessInstanceResolverFactory(this));
+        return resolveVariable(s, ExpressionScope.of(this));
     }
 
     /**
@@ -932,7 +918,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
         return getProcess() instanceof WorkflowProcess ? ((WorkflowProcess) getProcess()).getExpressionLanguage() : null;
     }
 
-    private Object resolveVariable(String s, VariableResolverFactory factory) {
+    private Object resolveVariable(String s, ExpressionScope scope) {
         VariableScope var = (VariableScope) ((ContextResolver) this.getProcess()).resolveContext(VariableScope.VARIABLE_SCOPE, s);
         if (var != null) {
             return getVariable(s);
@@ -949,9 +935,7 @@ public abstract class WorkflowProcessInstanceImpl extends ProcessInstanceImpl im
                     replacements.put(paramName, variableValue.toString());
                 } else {
                     try {
-                        variableValue = InterpolationEvaluator.evaluate(expressionLanguage(), paramName,
-                                () -> factory,
-                                () -> BpmnFeelVariables.forInterpolation(ContextFactory.fromProcessInstance(this)));
+                        variableValue = InterpolationEvaluator.evaluate(expressionLanguage(), paramName, scope);
                         String variableValueString = variableValue == null ? "" : variableValue.toString();
                         replacements.put(paramName, variableValueString);
                     } catch (Exception t) {

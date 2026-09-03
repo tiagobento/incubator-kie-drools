@@ -22,8 +22,8 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.stream.Stream;
 
-import org.jbpm.compiler.canonical.builtin.ReturnValueEvaluatorBuilderService;
 import org.jbpm.process.core.context.variable.VariableScope;
+import org.jbpm.process.expression.ExpressionLanguage.Surface;
 import org.jbpm.ruleflow.core.factory.DynamicNodeFactory;
 import org.jbpm.workflow.core.node.DynamicNode;
 
@@ -35,11 +35,8 @@ import static org.jbpm.ruleflow.core.factory.DynamicNodeFactory.METHOD_LANGUAGE;
 
 public class DynamicNodeVisitor extends CompositeContextNodeVisitor<DynamicNode> {
 
-    private ReturnValueEvaluatorBuilderService builder;
-
     public DynamicNodeVisitor(ClassLoader classLoader) {
         super(classLoader);
-        this.builder = ReturnValueEvaluatorBuilderService.instance(classLoader);
     }
 
     @Override
@@ -72,10 +69,12 @@ public class DynamicNodeVisitor extends CompositeContextNodeVisitor<DynamicNode>
     }
 
     private MethodCallExpr getActivationConditionStatement(DynamicNode node) {
-        return getFactoryMethod(getNodeId(node), METHOD_ACTIVATION_EXPRESSION, builder.build(node, node.getLanguage(), node.getActivationCondition(), Boolean.class, (String) null));
+        return getFactoryMethod(getNodeId(node), METHOD_ACTIVATION_EXPRESSION,
+                getExpressions().evaluator(node, Surface.CONDITION, node.getLanguage(), node.getActivationCondition(), Boolean.class, null));
     }
 
     private MethodCallExpr getCompletionConditionStatement(DynamicNode node) {
-        return getFactoryMethod(getNodeId(node), METHOD_COMPLETION_EXPRESSION, builder.build(node, node.getLanguage(), node.getCompletionCondition(), Boolean.class, (String) null));
+        return getFactoryMethod(getNodeId(node), METHOD_COMPLETION_EXPRESSION,
+                getExpressions().evaluator(node, Surface.CONDITION, node.getLanguage(), node.getCompletionCondition(), Boolean.class, null));
     }
 }

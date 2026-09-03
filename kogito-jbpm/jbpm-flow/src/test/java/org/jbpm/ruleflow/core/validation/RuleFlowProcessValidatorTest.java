@@ -19,11 +19,15 @@
 package org.jbpm.ruleflow.core.validation;
 
 import java.util.ArrayList;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.process.core.datatype.impl.type.StringDataType;
 import org.jbpm.process.core.validation.ProcessValidationError;
+import org.jbpm.process.expression.ExpressionLanguage;
+import org.jbpm.process.expression.ExpressionLanguages;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
 import org.jbpm.ruleflow.core.WorkflowElementIdentifierFactory;
 import org.jbpm.workflow.core.Node;
@@ -238,8 +242,75 @@ public class RuleFlowProcessValidatorTest {
                 endNode,
                 Node.CONNECTION_DEFAULT_TYPE);
 
-        ProcessValidationError[] errors = validator.validateProcess(process);
-        assertThat(errors).isNotNull().hasSize(1);
-        assertThat(errors[0].getMessage()).isEqualTo("Node 'ActionNode1' [3] mvel script language is not supported in Kogito.");
+        ExpressionLanguage java = new ExpressionLanguage() {
+            @Override
+            public String id() {
+                return "java";
+            }
+
+            @Override
+            public String uri() {
+                return "http://www.java.com/java";
+            }
+
+            @Override
+            public Set<Surface> surfaces() {
+                return EnumSet.of(Surface.SCRIPT);
+            }
+        };
+        ExpressionLanguages.register(java);
+        try {
+            ProcessValidationError[] errors = validator.validateProcess(process);
+            // only the language that is not on the classpath is reported: the module providing it is what makes a
+            // language available, and this test's classpath carries none of them
+            assertThat(errors).isNotNull().hasSize(1);
+            assertThat(errors[0].getMessage()).startsWith("Node 'ActionNode1' [3] The expression language 'mvel' is not available");
+        } finally {
+            ExpressionLanguages.unregister(java);
+        }
+    }
+
+    @Test
+    void testALanguageIsRefusedOnASurfaceItDoesNotSupport() {
+        StartNode startNode = new StartNode();
+        startNode.setName("Start");
+        startNode.setId(one);
+        process.addNode(startNode);
+        EndNode endNode = new EndNode();
+        endNode.setName("EndNode");
+        endNode.setId(two);
+        process.addNode(endNode);
+        ActionNode actionNode = new ActionNode();
+        actionNode.setName("ActionNode");
+        actionNode.setAction(new DroolsConsequenceAction("conditions-only", "a > b"));
+        actionNode.setId(three);
+        process.addNode(actionNode);
+        new org.jbpm.workflow.core.impl.ConnectionImpl(startNode, Node.CONNECTION_DEFAULT_TYPE, actionNode, Node.CONNECTION_DEFAULT_TYPE);
+        new org.jbpm.workflow.core.impl.ConnectionImpl(actionNode, Node.CONNECTION_DEFAULT_TYPE, endNode, Node.CONNECTION_DEFAULT_TYPE);
+
+        ExpressionLanguage conditionsOnly = new ExpressionLanguage() {
+            @Override
+            public String id() {
+                return "conditions-only";
+            }
+
+            @Override
+            public String uri() {
+                return "urn:conditions-only";
+            }
+
+            @Override
+            public Set<Surface> surfaces() {
+                return EnumSet.of(Surface.CONDITION);
+            }
+        };
+        ExpressionLanguages.register(conditionsOnly);
+        try {
+            ProcessValidationError[] errors = validator.validateProcess(process);
+            assertThat(errors).isNotNull().hasSize(1);
+            assertThat(errors[0].getMessage()).isEqualTo("Node 'ActionNode' [3] The expression language 'conditions-only' cannot be used for a script: 'a > b'");
+        } finally {
+            ExpressionLanguages.unregister(conditionsOnly);
+        }
     }
 }

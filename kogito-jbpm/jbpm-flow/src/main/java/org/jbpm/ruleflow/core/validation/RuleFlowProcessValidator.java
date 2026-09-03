@@ -18,21 +18,26 @@
  */
 package org.jbpm.ruleflow.core.validation;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
 
 import org.drools.core.time.impl.KieCronExpression;
+import org.jbpm.process.core.ContextContainer;
 import org.jbpm.process.core.Work;
 import org.jbpm.process.core.context.exception.CompensationScope;
 import org.jbpm.process.core.context.variable.Mappable;
 import org.jbpm.process.core.context.variable.Variable;
+import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.process.core.datatype.DataType;
 import org.jbpm.process.core.datatype.DataTypeResolver;
 import org.jbpm.process.core.event.EventFilter;
@@ -42,16 +47,25 @@ import org.jbpm.process.core.timer.Timer;
 import org.jbpm.process.core.validation.ProcessValidationError;
 import org.jbpm.process.core.validation.ProcessValidator;
 import org.jbpm.process.core.validation.impl.ProcessValidationErrorImpl;
+import org.jbpm.process.expression.ExpressionLanguage;
+import org.jbpm.process.expression.ExpressionLanguage.Surface;
+import org.jbpm.process.expression.ExpressionLanguages;
+import org.jbpm.process.expression.ValidationScope;
+import org.jbpm.process.instance.impl.ReturnValueConstraintEvaluator;
+import org.jbpm.process.instance.impl.ReturnValueEvaluator;
 import org.jbpm.ruleflow.core.Metadata;
 import org.jbpm.ruleflow.core.RuleFlowProcess;
-import org.jbpm.util.ExpressionLanguages;
+import org.jbpm.util.JbpmClassLoaderUtil;
 import org.jbpm.workflow.core.Constraint;
+import org.jbpm.workflow.core.DroolsAction;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.WorkflowProcess;
 import org.jbpm.workflow.core.impl.DataAssociation;
 import org.jbpm.workflow.core.impl.DroolsConsequenceAction;
+import org.jbpm.workflow.core.impl.ExtendedNodeImpl;
 import org.jbpm.workflow.core.impl.NodeImpl;
 import org.jbpm.workflow.core.node.ActionNode;
+import org.jbpm.workflow.core.node.Assignment;
 import org.jbpm.workflow.core.node.BoundaryEventNode;
 import org.jbpm.workflow.core.node.CatchLinkNode;
 import org.jbpm.workflow.core.node.CompositeNode;
@@ -139,6 +153,8 @@ public class RuleFlowProcessValidator implements ProcessValidator {
         }
 
         validateNodes(process.getNodes(), errors, process);
+
+        validateExpressions(process, errors);
 
         validateVariables(errors, process);
 
@@ -415,12 +431,6 @@ public class RuleFlowProcessValidator implements ProcessValidator {
                                 node,
                                 errors,
                                 "Action has empty action.");
-                    }
-                    if (!"java".equals(droolsAction.getDialect()) && !ExpressionLanguages.isFeel(droolsAction.getDialect())) {
-                        addErrorMessage(process,
-                                node,
-                                errors,
-                                droolsAction.getDialect() + " script language is not supported in Kogito.");
                     }
                     validateCompensationIntermediateOrEndEvent(actionNode,
                             process,
@@ -949,6 +959,187 @@ public class RuleFlowProcessValidator implements ProcessValidator {
                         .ifPresent(v -> errors.add(new ProcessValidationErrorImpl(process,
                                 "Variable '" + var.getName() + "' is used by Kogito, please rename it.")));
             }
+        }
+    }
+
+    /**
+     * Every expression in the process, checked against the language it is in: the language has to be available,
+     * has to support the surface the expression appears on, and gets to check the expression itself.
+     */
+    protected void validateExpressions(RuleFlowProcess process, List<ProcessValidationError> errors) {
+        ClassLoader classLoader = JbpmClassLoaderUtil.findClassLoader();
+        String documentLanguage = process.getExpressionLanguage();
+        if (documentLanguage != null && ExpressionLanguages.find(documentLanguage, classLoader).isEmpty()) {
+            errors.add(new ProcessValidationErrorImpl(process, unavailable(documentLanguage, classLoader)));
+        }
+        validateExpressions(process.getNodes(), process, errors, classLoader);
+    }
+
+    private void validateExpressions(org.kie.api.definition.process.Node[] nodes, RuleFlowProcess process, List<ProcessValidationError> errors, ClassLoader classLoader) {
+        for (org.kie.api.definition.process.Node node : nodes) {
+            ExpressionChecker checker = new ExpressionChecker(process, node, errors, classLoader);
+            if (node instanceof ActionNode && ((ActionNode) node).getAction() instanceof DroolsConsequenceAction) {
+                DroolsConsequenceAction action = (DroolsConsequenceAction) ((ActionNode) node).getAction();
+                checker.check(Surface.SCRIPT, action.getDialect(), action.getConsequence());
+            }
+            if (node instanceof ExtendedNodeImpl) {
+                for (String type : List.of(ExtendedNodeImpl.EVENT_NODE_ENTER, ExtendedNodeImpl.EVENT_NODE_EXIT)) {
+                    List<DroolsAction> actions = ((ExtendedNodeImpl) node).getActions(type);
+                    if (actions != null) {
+                        actions.stream()
+                                .filter(DroolsConsequenceAction.class::isInstance)
+                                .map(DroolsConsequenceAction.class::cast)
+                                .forEach(action -> checker.check(Surface.SCRIPT, action.getDialect(), action.getConsequence()));
+                    }
+                }
+            }
+            if (node instanceof NodeImpl) {
+                for (Collection<Constraint> constraints : ((NodeImpl) node).getConstraints().values()) {
+                    if (constraints == null) {
+                        continue;
+                    }
+                    for (Constraint constraint : constraints) {
+                        if (constraint == null || "rule".equals(constraint.getType())) {
+                            continue;
+                        }
+                        if (constraint instanceof ReturnValueConstraintEvaluator && ((ReturnValueConstraintEvaluator) constraint).getReturnValueEvaluator() != null) {
+                            checker.check(Surface.CONDITION, ((ReturnValueConstraintEvaluator) constraint).getReturnValueEvaluator());
+                        } else {
+                            checker.check(Surface.CONDITION, constraint.getDialect(), constraint.getConstraint());
+                        }
+                    }
+                }
+            }
+            if (node instanceof ForEachNode && ((ForEachNode) node).hasCompletionCondition()) {
+                checker.check(Surface.CONDITION, ((ForEachNode) node).getCompletionConditionExpression());
+            }
+            if (node instanceof DynamicNode) {
+                DynamicNode dynamicNode = (DynamicNode) node;
+                checker.check(Surface.CONDITION, dynamicNode.getLanguage(), dynamicNode.getActivationCondition());
+                checker.check(Surface.CONDITION, dynamicNode.getLanguage(), dynamicNode.getCompletionCondition());
+            }
+            if (node instanceof StartNode && node.getMetaData().get(Metadata.TRIGGER_EXPRESSION) != null) {
+                checker.check(Surface.CONDITION, (String) node.getMetaData().get(Metadata.TRIGGER_EXPRESSION_LANGUAGE), (String) node.getMetaData().get(Metadata.TRIGGER_EXPRESSION));
+            }
+            if (node instanceof Mappable) {
+                List<DataAssociation> associations = new ArrayList<>(((Mappable) node).getInAssociations());
+                associations.addAll(((Mappable) node).getOutAssociations());
+                for (DataAssociation association : associations) {
+                    if (association.getTransformation() != null) {
+                        checker.check(Surface.EXPRESSION, association.getTransformation().getLanguage(), association.getTransformation().getExpression());
+                    }
+                    for (Assignment assignment : association.getAssignments()) {
+                        checker.checkAssignment(assignment);
+                    }
+                }
+            }
+            if (node instanceof NodeContainer) {
+                validateExpressions(((NodeContainer) node).getNodes(), process, errors, classLoader);
+            }
+        }
+    }
+
+    private static String unavailable(String language, ClassLoader classLoader) {
+        return format("The expression language '%s' is not available (%s). A language is made available by adding the module that provides it to the application.",
+                language, ExpressionLanguages.describeAvailable(classLoader));
+    }
+
+    /**
+     * Checks the expressions of one node against their languages.
+     */
+    private final class ExpressionChecker {
+
+        private final RuleFlowProcess process;
+        private final org.kie.api.definition.process.Node node;
+        private final List<ProcessValidationError> errors;
+        private final ClassLoader classLoader;
+        private ValidationScope scope;
+
+        private ExpressionChecker(RuleFlowProcess process, org.kie.api.definition.process.Node node, List<ProcessValidationError> errors, ClassLoader classLoader) {
+            this.process = process;
+            this.node = node;
+            this.errors = errors;
+            this.classLoader = classLoader;
+        }
+
+        /**
+         * An evaluator built by a language is checked against that language; one written in Java by the application
+         * itself, or generated into it, is already compiled and has nothing to check.
+         */
+        void check(Surface surface, ReturnValueEvaluator evaluator) {
+            if (ReturnValueEvaluator.FUNCTIONAL.equals(evaluator.dialect())) {
+                return;
+            }
+            check(surface, evaluator.dialect(), evaluator.expression());
+        }
+
+        void check(Surface surface, String dialect, String expression) {
+            if (expression == null || expression.isBlank()) {
+                // a synthetic action, or a condition the parser left empty: nothing for a language to look at
+                return;
+            }
+            ExpressionLanguage language = language(dialect);
+            if (language == null) {
+                return;
+            }
+            if (!language.supports(surface)) {
+                addErrorMessage(process, node, errors, format("The expression language '%s' cannot be used for %s: '%s'", language.id(), ExpressionLanguage.describe(surface), expression));
+                return;
+            }
+            language.validate(surface, expression, scope(), problem -> addErrorMessage(process, node, errors, problem));
+        }
+
+        void checkAssignment(Assignment assignment) {
+            String from = assignment.getFrom() == null ? null : assignment.getFrom().getExpression();
+            String to = assignment.getTo() == null ? null : assignment.getTo().getExpression();
+            boolean fromIsPlaceholder = from != null && from.contains("#{");
+            boolean toIsPlaceholder = to != null && to.contains("#{");
+            if (assignment.getDialect() == null && !fromIsPlaceholder && !toIsPlaceholder) {
+                return;
+            }
+            ExpressionLanguage language = language(assignment.getDialect());
+            if (language == null) {
+                return;
+            }
+            if (!fromIsPlaceholder && !toIsPlaceholder) {
+                // a whole assignment in the language, or a copy that needs no language at all
+                return;
+            }
+            if (fromIsPlaceholder && !language.supports(Surface.INTERPOLATION)) {
+                addErrorMessage(process, node, errors, format("The expression language '%s' cannot be used for %s: '%s'", language.id(), ExpressionLanguage.describe(Surface.INTERPOLATION), from));
+            }
+            if (toIsPlaceholder && !language.supports(Surface.ASSIGNMENT_TARGET)) {
+                addErrorMessage(process, node, errors, format("The expression language '%s' cannot be used for %s: '%s'", language.id(), ExpressionLanguage.describe(Surface.ASSIGNMENT_TARGET), to));
+            }
+        }
+
+        private ExpressionLanguage language(String dialect) {
+            String selected = dialect == null || dialect.isBlank() ? ExpressionLanguages.languageOf(process) : dialect;
+            java.util.Optional<ExpressionLanguage> language = ExpressionLanguages.find(selected, classLoader);
+            if (language.isEmpty()) {
+                addErrorMessage(process, node, errors, unavailable(selected, classLoader));
+                return null;
+            }
+            return language.get();
+        }
+
+        private ValidationScope scope() {
+            if (scope == null) {
+                Map<String, Variable> variables = new LinkedHashMap<>();
+                process.getVariableScope().getVariables().forEach(variable -> variables.put(variable.getName(), variable));
+                Deque<VariableScope> enclosing = new ArrayDeque<>();
+                NodeContainer container = node instanceof Node ? ((Node) node).getParentContainer() : null;
+                while (container instanceof ContextContainer) {
+                    VariableScope variableScope = (VariableScope) ((ContextContainer) container).getDefaultContext(VariableScope.VARIABLE_SCOPE);
+                    if (variableScope != null) {
+                        enclosing.addFirst(variableScope);
+                    }
+                    container = container instanceof Node ? ((Node) container).getParentContainer() : null;
+                }
+                enclosing.forEach(variableScope -> variableScope.getVariables().forEach(variable -> variables.put(variable.getName(), variable)));
+                scope = new ValidationScope(variables.values(), Arrays.asList(process.getGlobalNames()), process.getImports(), classLoader);
+            }
+            return scope;
         }
     }
 

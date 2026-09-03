@@ -2340,9 +2340,7 @@ kogito-drools/kogito-pmml/src/test/resources/org/kie/kogito/pmml/test_regression
 kogito-drools/kogito-pmml/src/test/resources/org/kie/kogito/pmml/test_tree.pmml
 kogito-drools/kogito-scenario-simulation/src/test/resources/dmnPmml/test_regression.pmml
 kogito-drools/kogito-scenario-simulation/src/test/resources/dmnPmml/test_tree.pmml
-kogito-jbpm/jbpm-flow-builder/src/main/resources/META-INF/services/org.jbpm.compiler.canonical.builtin.ReturnValueEvaluatorBuilder
 kogito-jbpm/jbpm-flow-builder/src/main/resources/META-INF/services/org.jbpm.compiler.canonical.node.NodeVisitorBuilder
-kogito-jbpm/jbpm-flow-builder/src/main/resources/META-INF/services/org.jbpm.process.builder.transformation.DataTransformerCompiler
 kogito-jbpm/jbpm-flow/src/main/resources/META-INF/services/org.jbpm.ruleflow.core.factory.provider.NodeFactoryProvider
 kogito-jbpm/jbpm-tests/src/test/resources/calendar.properties
 kogito-jbpm/jbpm-tests/src/test/resources/xxe-protection/Text1.txt

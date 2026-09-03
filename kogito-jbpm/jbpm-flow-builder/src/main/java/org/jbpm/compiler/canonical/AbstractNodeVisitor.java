@@ -26,8 +26,6 @@ import java.util.Objects;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import org.jbpm.compiler.canonical.builtin.ReturnValueEvaluatorBuilderService;
-import org.jbpm.process.builder.action.ActionCompilerRegistry;
 import org.jbpm.process.core.Context;
 import org.jbpm.process.core.ContextContainer;
 import org.jbpm.process.core.ContextResolver;
@@ -35,6 +33,7 @@ import org.jbpm.process.core.context.variable.Mappable;
 import org.jbpm.process.core.context.variable.Variable;
 import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.process.core.datatype.DataTypeResolver;
+import org.jbpm.process.expression.ExpressionLanguage.Surface;
 import org.jbpm.process.instance.impl.ReturnValueConstraintEvaluator;
 import org.jbpm.process.instance.impl.ReturnValueEvaluator;
 import org.jbpm.process.instance.impl.actions.HandleEscalationAction;
@@ -98,20 +97,20 @@ public abstract class AbstractNodeVisitor<T extends Node> extends AbstractVisito
 
     protected abstract String getNodeKey();
 
-    private ReturnValueEvaluatorBuilderService returnValueEvaluatorBuilderService;
+    private ExpressionCodegen expressions;
     private ClassLoader classLoader;
 
     public AbstractNodeVisitor(ClassLoader classLoader) {
         this.classLoader = classLoader;
-        this.returnValueEvaluatorBuilderService = ReturnValueEvaluatorBuilderService.instance(classLoader);
+        this.expressions = ExpressionCodegen.of(classLoader);
     }
 
     public ClassLoader getClassLoader() {
         return classLoader;
     }
 
-    public ReturnValueEvaluatorBuilderService getReturnValueEvaluatorBuilderService() {
-        return returnValueEvaluatorBuilderService;
+    public ExpressionCodegen getExpressions() {
+        return expressions;
     }
 
     public void visitNodeEntryPoint(String factoryName, T node, BlockStmt body, VariableScope variableScope, ProcessMetaData metadata) {
@@ -125,7 +124,7 @@ public abstract class AbstractNodeVisitor<T extends Node> extends AbstractVisito
             addScript(extendedNodeImpl, body, ON_ACTION_SCRIPT_METHOD, ExtendedNodeImpl.EVENT_NODE_EXIT);
         }
 
-        addConstraints(node, returnValueEvaluatorBuilderService, body);
+        addConstraints(node, body);
     }
 
     private void addScript(ExtendedNodeImpl extendedNodeImpl, BlockStmt body, String factoryMethod, String actionType) {
@@ -149,7 +148,7 @@ public abstract class AbstractNodeVisitor<T extends Node> extends AbstractVisito
         }
     }
 
-    public void addConstraints(T currentNode, ReturnValueEvaluatorBuilderService returnValueEvaluatorBuilderService, BlockStmt body) {
+    public void addConstraints(T currentNode, BlockStmt body) {
         NodeImpl node = (NodeImpl) currentNode;
         for (Map.Entry<ConnectionRef, Collection<Constraint>> entry : node.getConstraints().entrySet()) {
             if (entry.getValue() == null || entry.getValue().isEmpty()) {
@@ -160,14 +159,14 @@ public abstract class AbstractNodeVisitor<T extends Node> extends AbstractVisito
                 Expression returnValueEvaluator;
                 if (constraint instanceof ReturnValueConstraintEvaluator returnValueConstraintEvaluator) {
                     ReturnValueEvaluator evaluator = returnValueConstraintEvaluator.getReturnValueEvaluator();
-                    returnValueEvaluator = returnValueEvaluatorBuilderService.build(node,
+                    returnValueEvaluator = expressions.evaluator(node, Surface.CONDITION,
                             evaluator.dialect(),
                             evaluator.expression(),
                             evaluator.type(),
                             evaluator.root());
 
                 } else {
-                    returnValueEvaluator = returnValueEvaluatorBuilderService.build(node,
+                    returnValueEvaluator = expressions.evaluator(node, Surface.CONDITION,
                             constraint.getDialect(),
                             constraint.getConstraint(),
                             Boolean.class,
@@ -190,7 +189,7 @@ public abstract class AbstractNodeVisitor<T extends Node> extends AbstractVisito
         if (script == null) {
             return new NullLiteralExpr();
         }
-        return ActionCompilerRegistry.instance().find(dialect).buildAction(extendedNodeImpl, script);
+        return expressions.script(extendedNodeImpl, dialect, script);
     }
 
     private boolean isExtendedNode(T node) {
@@ -334,8 +333,7 @@ public abstract class AbstractNodeVisitor<T extends Node> extends AbstractVisito
 
         ContextResolver contextResolver = type.equals(DataAssociationType.INPUT) ? node : wrapContextResolver(node, inputs);
 
-        ReturnValueEvaluatorBuilderService service = ReturnValueEvaluatorBuilderService.instance();
-        Expression returnValueEvaluatorExpression = service.build(contextResolver, transformation.getLanguage(), transformation.getExpression(), Object.class, null);
+        Expression returnValueEvaluatorExpression = expressions.evaluator(contextResolver, Surface.EXPRESSION, transformation.getLanguage(), transformation.getExpression(), Object.class, null);
         ClassOrInterfaceType clazz = StaticJavaParser.parseClassOrInterfaceType(Transformation.class.getName());
         return new ObjectCreationExpr(null, clazz, NodeList.nodeList(lang, expression, returnValueEvaluatorExpression));
 

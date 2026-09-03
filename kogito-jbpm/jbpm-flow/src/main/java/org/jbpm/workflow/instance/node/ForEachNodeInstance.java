@@ -31,6 +31,7 @@ import java.util.stream.Collectors;
 
 import org.jbpm.process.core.ContextContainer;
 import org.jbpm.process.core.context.variable.VariableScope;
+import org.jbpm.process.expression.ExpressionScope;
 import org.jbpm.process.instance.ContextInstance;
 import org.jbpm.process.instance.ContextableInstance;
 import org.jbpm.process.instance.KogitoProcessContextImpl;
@@ -45,13 +46,10 @@ import org.jbpm.workflow.core.node.ForEachNode.ForEachJoinNode;
 import org.jbpm.workflow.core.node.ForEachNode.ForEachSplitNode;
 import org.jbpm.workflow.instance.NodeInstance;
 import org.jbpm.workflow.instance.NodeInstanceContainer;
-import org.jbpm.workflow.instance.impl.MVELProcessHelper;
+import org.jbpm.workflow.instance.impl.InterpolationEvaluator;
 import org.jbpm.workflow.instance.impl.NodeInstanceImpl;
-import org.jbpm.workflow.instance.impl.NodeInstanceResolverFactory;
 import org.kie.api.definition.process.Connection;
 import org.kie.kogito.internal.process.runtime.KogitoNodeInstance;
-import org.mvel2.integration.VariableResolver;
-import org.mvel2.integration.impl.SimpleValueResolver;
 
 import static org.jbpm.workflow.instance.WorkflowProcessParameters.WORKFLOW_PARAM_MULTIPLE_CONNECTIONS;
 
@@ -194,8 +192,7 @@ public class ForEachNodeInstance extends CompositeContextNodeInstance {
                 collection = variableScopeInstance.getVariable(collectionExpression);
             } else {
                 try {
-                    collection = MVELProcessHelper.evaluator().eval(collectionExpression, new NodeInstanceResolverFactory(
-                            this));
+                    collection = InterpolationEvaluator.evaluate(expressionLanguage(), collectionExpression, ExpressionScope.of(this));
                 } catch (Exception t) {
                     throw new IllegalArgumentException(
                             "Could not find collection " + collectionExpression);
@@ -366,34 +363,5 @@ public class ForEachNodeInstance extends CompositeContextNodeInstance {
      */
     static boolean isSerializable(org.kie.api.runtime.process.NodeInstance toCheck) {
         return !NOT_SERIALIZABLE_CLASSES.contains(toCheck.getClass());
-    }
-
-    private class ForEachNodeInstanceResolverFactory extends NodeInstanceResolverFactory {
-
-        private static final long serialVersionUID = -8856846610671009685L;
-
-        private Map<String, Object> tempVariables;
-
-        public ForEachNodeInstanceResolverFactory(NodeInstance nodeInstance, Map<String, Object> tempVariables) {
-            super(nodeInstance);
-            this.tempVariables = tempVariables;
-        }
-
-        @Override
-        public boolean isResolveable(String name) {
-            boolean result = tempVariables.containsKey(name);
-            if (result) {
-                return result;
-            }
-            return super.isResolveable(name);
-        }
-
-        @Override
-        public VariableResolver getVariableResolver(String name) {
-            if (tempVariables.containsKey(name)) {
-                return new SimpleValueResolver(tempVariables.get(name));
-            }
-            return super.getVariableResolver(name);
-        }
     }
 }

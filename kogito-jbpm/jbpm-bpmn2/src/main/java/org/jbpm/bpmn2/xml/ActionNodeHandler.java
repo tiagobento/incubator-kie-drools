@@ -18,7 +18,6 @@
  */
 package org.jbpm.bpmn2.xml;
 
-import org.drools.mvel.java.JavaDialect;
 import org.jbpm.compiler.xml.compiler.XmlDumper;
 import org.jbpm.process.core.context.exception.CompensationScope;
 import org.jbpm.workflow.core.Node;
@@ -184,8 +183,8 @@ public class ActionNodeHandler extends AbstractNodeHandler {
                         actionNode,
                         xmlDump,
                         metaDataType);
-                if (JavaDialect.ID.equals(action.getDialect())) {
-                    xmlDump.append("scriptFormat=\"" + XmlBPMNProcessDumper.JAVA_LANGUAGE + "\" ");
+                if (action.getDialect() != null) {
+                    xmlDump.append("scriptFormat=\"" + XmlBPMNProcessDumper.uriOf(action.getDialect()) + "\" ");
                 }
                 Object isForCompensationObj = actionNode.getMetaData("isForCompensation");
                 if (isForCompensationObj != null && (Boolean) isForCompensationObj) {
