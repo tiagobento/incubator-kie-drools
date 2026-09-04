@@ -32,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class BpmnFeelVariablesTest {
 
@@ -208,6 +209,21 @@ class BpmnFeelVariablesTest {
             assertThat(BpmnFeel.newFeel(false).evaluate("kcontext.nodeInstance.processInstance.processId", scope)).isEqualTo(FeelTestProcess.PROCESS_ID);
             return null;
         });
+    }
+
+    @Test
+    void notSandboxedAPublicNoArgMethodIsReachableByName() {
+        // FEEL resolves a name on a Java object through getX(), then a method called exactly X, then isX(), and
+        // invokes what it finds: unsandboxed, "milestones" reaches WorkflowProcessInstanceImpl.milestones(). This is
+        // the reach the sandbox exists to close - the same rule finds start() and cancel()
+        FeelTestProcess.inAction(Map.of(), context -> {
+            Map<String, Object> scope = BpmnFeelVariables.of(context, false);
+            assertThat(BpmnFeel.newFeel(false).evaluate("kcontext.processInstance.milestones", scope)).isNotNull();
+            return null;
+        });
+        assertThatExceptionOfType(org.jbpm.process.instance.impl.FeelReturnValueEvaluatorException.class)
+                .isThrownBy(() -> BpmnFeel.compile("kcontext.processInstance.milestones", BpmnFeelVariables.expressionTypes(List.of(), true), true))
+                .withMessageContaining("Unknown variable");
     }
 
     @Test

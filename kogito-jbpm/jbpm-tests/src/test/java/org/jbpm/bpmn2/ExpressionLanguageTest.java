@@ -50,6 +50,7 @@ import org.kie.kogito.process.ProcessInstance;
 import org.kie.kogito.process.workitems.impl.DefaultKogitoWorkItemHandler;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * How a BPMN document decides which language an expression is written in.
@@ -79,6 +80,13 @@ public class ExpressionLanguageTest extends JbpmBpmn2TestCase {
         tookFeel.start();
         assertThat(tookFeel.status()).isEqualTo(ProcessInstance.STATE_COMPLETED);
         assertThat(tookFeel.variables().getPath()).isEqualTo("feel");
+    }
+
+    @Test
+    public void testAnUnrecognisedOnEntryScriptFormatIsReported() {
+        // it used to be absorbed by MVEL, silently: a format the engine does not know is a mistake in the model
+        assertThatThrownBy(() -> createKogitoProcessRuntime("org/jbpm/bpmn2/feel/BPMN2-UnknownOnEntryScriptFormat.bpmn2"))
+                .hasMessageContaining("Unknown scriptFormat 'http://www.groovy-lang.org/groovy'");
     }
 
     @Test

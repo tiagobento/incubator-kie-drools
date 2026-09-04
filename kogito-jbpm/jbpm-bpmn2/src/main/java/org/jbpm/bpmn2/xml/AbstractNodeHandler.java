@@ -275,15 +275,22 @@ public abstract class AbstractNodeHandler extends BaseAbstractHandler implements
     public static DroolsAction extractScript(Element xmlNode, String documentLanguage) {
         String scriptFormat = xmlNode.getAttribute("scriptFormat");
         String dialect;
-        if (ExpressionLanguages.JAVA_LANGUAGE.equals(scriptFormat)) {
+        if (scriptFormat == null || scriptFormat.isEmpty()) {
+            // no scriptFormat: the document's language when it declared FEEL, else MVEL, as always
+            dialect = ExpressionLanguages.isFeel(documentLanguage) ? ExpressionLanguages.FEEL : ExpressionLanguages.MVEL;
+        } else if (ExpressionLanguages.JAVA_LANGUAGE.equals(scriptFormat) || "java".equalsIgnoreCase(scriptFormat)) {
             dialect = "java";
         } else if (ExpressionLanguages.isFeel(scriptFormat)) {
             dialect = ExpressionLanguages.FEEL;
-        } else if ((scriptFormat == null || scriptFormat.isEmpty()) && ExpressionLanguages.isFeel(documentLanguage)) {
-            dialect = ExpressionLanguages.FEEL;
-        } else {
-            // MVEL, as before: anything that is not Java or FEEL, including a script with no scriptFormat at all
+        } else if (ExpressionLanguages.isMvel(scriptFormat)) {
             dialect = ExpressionLanguages.MVEL;
+        } else {
+            // anything else used to run as MVEL, silently; a script format the engine does not know is a mistake
+            // in the model, and is reported as one
+            throw new ProcessParsingValidationException(String.format(
+                    "Unknown scriptFormat '%s' on an onEntry or onExit script. Expected %s, %s, %s or %s.",
+                    scriptFormat, ExpressionLanguages.JAVA_LANGUAGE, ExpressionLanguages.MVEL_LANGUAGE,
+                    ExpressionLanguages.FEEL_LANGUAGE, ExpressionLanguages.DMN_FEEL_LANGUAGE));
         }
         NodeList subNodeList = xmlNode.getChildNodes();
         for (int j = 0; j < subNodeList.getLength(); j++) {
