@@ -21,6 +21,7 @@ package org.jbpm.process.instance.impl;
 import java.util.Map;
 
 import org.jbpm.process.instance.impl.feel.BpmnFeel;
+import org.jbpm.process.instance.impl.feel.BpmnFeelSettings;
 import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.kie.dmn.api.feel.runtime.events.FEELEvent;
 import org.kie.dmn.feel.FEEL;
@@ -31,6 +32,8 @@ public class FeelReturnValueEvaluator extends AbstractReturnValueEvaluator {
 
     /** Compiled once and kept: parsing is the expensive part of a FEEL evaluation, and the expression never changes. */
     private transient CompiledExpression compiledExpression;
+    /** The mode it was compiled in: a sandboxed evaluation must not run an expression compiled with external functions allowed. */
+    private transient boolean compiledSandboxed;
 
     public FeelReturnValueEvaluator() {
         this("true()");
@@ -52,21 +55,24 @@ public class FeelReturnValueEvaluator extends AbstractReturnValueEvaluator {
     }
 
     public Object evaluate(KogitoProcessContext context) {
-        Map<String, Object> variables = BpmnFeelVariables.of(context);
+        // one reading of the setting per evaluation, so the scope and the engine agree
+        boolean sandboxed = BpmnFeelSettings.isSandboxed();
+        Map<String, Object> variables = BpmnFeelVariables.of(context, sandboxed);
 
-        FEEL feel = BpmnFeel.newFeel();
+        FEEL feel = BpmnFeel.newFeel(sandboxed);
         FeelErrorEvaluatorListener listener = new FeelErrorEvaluatorListener();
         feel.addListener(listener);
 
-        CompiledExpression compiled = compiledExpression != null
+        CompiledExpression compiled = compiledExpression != null && compiledSandboxed == sandboxed
                 ? compiledExpression
-                : BpmnFeel.compileQuietly(feel, expression(), variables.keySet());
+                : BpmnFeel.compileQuietly(feel, expression(), BpmnFeelVariables.expressionTypes(variables.keySet(), sandboxed));
 
         Object value = feel.evaluate(compiled, variables);
 
         // compile and evaluation errors are reported together, and only a clean expression is worth keeping
         BpmnFeel.failOnError(listener, expression());
         compiledExpression = compiled;
+        compiledSandboxed = sandboxed;
         if (Boolean.class.equals(type()) && !(value instanceof Boolean)) {
             throw new RuntimeException("Constraints must return boolean values: " +
                     expression() + " returns " + value +

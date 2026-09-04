@@ -27,6 +27,8 @@ public class RestCallInfo {
     private Integer port;
     private String method;
     private Map<String, Object> arguments;
+    private String outputExpression;
+    private String outputExpressionLang = "jq";
 
     public String getEndpoint() {
         return endpoint;
@@ -68,9 +70,26 @@ public class RestCallInfo {
         this.arguments = arguments;
     }
 
+    public String getOutputExpression() {
+        return outputExpression;
+    }
+
+    public void setOutputExpression(String outputExpression) {
+        this.outputExpression = outputExpression;
+    }
+
+    public String getOutputExpressionLang() {
+        return outputExpressionLang;
+    }
+
+    public void setOutputExpressionLang(String outputExpressionLang) {
+        this.outputExpressionLang = outputExpressionLang;
+    }
+
     @Override
     public String toString() {
         return "RestCallInfo [endpoint=" + endpoint + ", host=" + host + ", port=" + port + ", method=" + method
-                + ", arguments=" + arguments + "]";
+                + ", arguments=" + arguments + ", outputExpression=" + outputExpression + ", outputExpressionLang="
+                + outputExpressionLang + "]";
     }
 }

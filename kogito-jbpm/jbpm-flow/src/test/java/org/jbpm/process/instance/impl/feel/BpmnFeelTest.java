@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.util.List;
 
 import org.jbpm.process.instance.impl.FeelReturnValueEvaluatorException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.kie.dmn.feel.exceptions.ExternalFunctionsDisabledException;
 
@@ -30,11 +31,44 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 class BpmnFeelTest {
 
+    private static final String EXTERNAL_MAX =
+            "{ maximum : function( v1, v2 ) external { java : { class : \"java.lang.Math\", method signature: \"max(long,long)\" } }, the max : maximum( 10, 20 ) }.the max";
+
+    @AfterEach
+    void backToTheConfiguredMode() {
+        BpmnFeelSettings.setSandboxed(null);
+    }
+
     @Test
     void theBpmnEngineRefusesExternalFunctions() {
-        assertThatExceptionOfType(ExternalFunctionsDisabledException.class)
-                .isThrownBy(() -> BpmnFeel.compile(
-                        "{ maximum : function( v1, v2 ) external { java : { class : \"java.lang.Math\", method signature: \"max(long,long)\" } }, the max : maximum( 10, 20 ) }.the max"));
+        assertThatExceptionOfType(ExternalFunctionsDisabledException.class).isThrownBy(() -> BpmnFeel.compile(EXTERNAL_MAX));
+        assertThatExceptionOfType(ExternalFunctionsDisabledException.class).isThrownBy(() -> BpmnFeel.newFeel().evaluate(EXTERNAL_MAX));
+    }
+
+    @Test
+    void notSandboxedTheEngineRunsExternalFunctions() {
+        // the behaviour a stock FEEL engine has, and BPMN FEEL had before the sandbox
+        BpmnFeelSettings.setSandboxed(false);
+        assertThat(BpmnFeel.compile(EXTERNAL_MAX)).isNotNull();
+        assertThat(BpmnFeel.newFeel().evaluate(EXTERNAL_MAX)).isEqualTo(BigDecimal.valueOf(20));
+    }
+
+    @Test
+    void theModeCanBeGivenExplicitlyWhateverIsConfigured() {
+        assertThat(BpmnFeel.newFeel(false).evaluate(EXTERNAL_MAX)).isEqualTo(BigDecimal.valueOf(20));
+        assertThat(BpmnFeel.compile(EXTERNAL_MAX, List.of(), false)).isNotNull();
+        BpmnFeelSettings.setSandboxed(false);
+        assertThatExceptionOfType(ExternalFunctionsDisabledException.class).isThrownBy(() -> BpmnFeel.newFeel(true).evaluate(EXTERNAL_MAX));
+        assertThatExceptionOfType(ExternalFunctionsDisabledException.class).isThrownBy(() -> BpmnFeel.compile(EXTERNAL_MAX, List.of(), true));
+    }
+
+    @Test
+    void everythingElseIsTheSameInBothModes() {
+        for (boolean sandboxed : new boolean[] { true, false }) {
+            assertThat(BpmnFeel.newFeel(sandboxed).evaluate("someVariable + 1", java.util.Map.of("someVariable", 41))).isEqualTo(BigDecimal.valueOf(42));
+            assertThat(BpmnFeel.newFeel(sandboxed).evaluate("now()")).isNotNull();
+            assertThatExceptionOfType(FeelReturnValueEvaluatorException.class).isThrownBy(() -> BpmnFeel.compile("1 +", List.of(), sandboxed));
+        }
     }
 
     @Test

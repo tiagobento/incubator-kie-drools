@@ -60,6 +60,8 @@ import org.jbpm.process.core.impl.ProcessImpl;
 import org.jbpm.process.core.validation.ProcessValidationError;
 import org.jbpm.process.core.validation.ProcessValidator;
 import org.jbpm.process.core.validation.ProcessValidatorRegistry;
+import org.jbpm.ruleflow.core.RuleFlowProcess;
+import org.jbpm.ruleflow.core.validation.FeelExpressionsValidator;
 import org.jbpm.workflow.core.Constraint;
 import org.jbpm.workflow.core.Node;
 import org.jbpm.workflow.core.impl.ConnectionRef;
@@ -120,6 +122,13 @@ public class ProcessBuilderImpl implements org.drools.compiler.compiler.ProcessB
                             errors[i].toString(),
                             -1,
                             -1));
+                }
+            }
+            if (process instanceof RuleFlowProcess) {
+                // every FEEL expression compiles in the configured mode, or the build fails
+                for (ProcessValidationError error : FeelExpressionsValidator.validate((RuleFlowProcess) process)) {
+                    hasErrors = true;
+                    this.errors.add(new ParserError(resource, error.toString(), -1, -1));
                 }
             }
         }

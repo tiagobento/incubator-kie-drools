@@ -93,7 +93,9 @@ class JavaRuleFlowProcessValidator extends RuleFlowProcessValidator {
         for (Node node : nodes) {
             if (node instanceof ActionNode) {
                 final ActionNode actionNode = (ActionNode) node;
-                if (actionNode.getAction() instanceof DroolsConsequenceAction) {
+                // only a Java script is Java: a FEEL script task carries FEEL, checked by FeelExpressionsValidator
+                if (actionNode.getAction() instanceof DroolsConsequenceAction
+                        && "java".equalsIgnoreCase(((DroolsConsequenceAction) actionNode.getAction()).getDialect())) {
                     validateJava(actionNode, errors, process);
                 }
             }

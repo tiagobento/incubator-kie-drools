@@ -20,12 +20,16 @@ package org.jbpm.process.instance.impl.actions;
 
 import java.util.Map;
 
+import org.jbpm.process.instance.FeelTestProcess;
 import org.jbpm.process.instance.impl.EmtpyKogitoProcessContext;
 import org.jbpm.process.instance.impl.FeelReturnValueEvaluatorException;
+import org.jbpm.process.instance.impl.feel.BpmnFeelSettings;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.kie.dmn.feel.exceptions.ExternalFunctionsDisabledException;
 import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 
@@ -38,8 +42,27 @@ class FeelScriptActionTest {
 
     private static final KogitoProcessContext NO_PROCESS = new EmtpyKogitoProcessContext(Map.of("a", 1, "b", 2));
 
+    private static final String EXTERNAL_MAX_INTO_RESULT =
+            "{ maximum : function( v1, v2 ) external { java : { class : \"java.lang.Math\", method signature: \"max(long,long)\" } }, result : maximum( 1, 2 ) }";
+
+    @AfterEach
+    void backToTheConfiguredMode() {
+        BpmnFeelSettings.setSandboxed(null);
+    }
+
     private static void run(String expression) throws Exception {
         new FeelScriptAction(expression).execute(NO_PROCESS);
+    }
+
+    private static Object runInProcess(FeelScriptAction action, KogitoProcessContext context) {
+        try {
+            action.execute(context);
+        } catch (RuntimeException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
+        return context.getVariable("result");
     }
 
     @Test
@@ -66,6 +89,41 @@ class FeelScriptActionTest {
     void aScriptCannotDeclareAnExternalFunction() {
         assertThatExceptionOfType(ExternalFunctionsDisabledException.class)
                 .isThrownBy(() -> run("{ escape : function( v ) external { java : { class : \"java.lang.Runtime\", method signature: \"getRuntime()\" } } }"));
+    }
+
+    @Test
+    void notSandboxedAScriptMayDeclareAnExternalFunctionAndItsResultIsWrittenBack() {
+        BpmnFeelSettings.setSandboxed(false);
+        Object result = FeelTestProcess.inAction(Map.of("result", 0), context -> runInProcess(new FeelScriptAction(EXTERNAL_MAX_INTO_RESULT), context));
+        assertThat(((Number) result).intValue()).isEqualTo(2);
+    }
+
+    @Test
+    void aScriptCompiledInOneModeIsRecompiledInTheOther() {
+        // the compiled expression is cached per action; a flip of the setting must not let a cached, unsandboxed
+        // compilation serve a sandboxed run
+        FeelScriptAction action = new FeelScriptAction(EXTERNAL_MAX_INTO_RESULT);
+        BpmnFeelSettings.setSandboxed(false);
+        assertThatNoException().isThrownBy(() -> action.execute(NO_PROCESS));
+        BpmnFeelSettings.setSandboxed(true);
+        assertThatExceptionOfType(ExternalFunctionsDisabledException.class).isThrownBy(() -> action.execute(NO_PROCESS));
+        BpmnFeelSettings.setSandboxed(false);
+        assertThatNoException().isThrownBy(() -> action.execute(NO_PROCESS));
+    }
+
+    @Test
+    void sandboxedAScriptReadsTheCuratedKcontext() {
+        Object result = FeelTestProcess.inAction(Map.of("result", ""),
+                context -> runInProcess(new FeelScriptAction("{ result: kcontext.processInstance.processId + \"/\" + kcontext.nodeInstance.nodeName }"), context));
+        assertThat(result).isEqualTo(FeelTestProcess.PROCESS_ID + "/" + FeelTestProcess.ACTION_NODE_NAME);
+    }
+
+    @Test
+    void notSandboxedAScriptReadsTheLiveContext() {
+        BpmnFeelSettings.setSandboxed(false);
+        Object result = FeelTestProcess.inAction(Map.of("result", ""),
+                context -> runInProcess(new FeelScriptAction("{ result: kcontext.processInstance.process.id }"), context));
+        assertThat(result).isEqualTo(FeelTestProcess.PROCESS_ID);
     }
 
     @Test

@@ -16,23 +16,26 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.jbpm.bpmn2.feel;
+package org.jbpm.compiler.canonical.descriptors;
 
-import org.jbpm.process.builder.dialect.ProcessDialect;
-import org.jbpm.process.builder.dialect.ProcessDialectProvider;
+import java.util.function.Supplier;
 
-public class FeelProcessDialectProvider implements ProcessDialectProvider {
+import org.jbpm.process.instance.impl.ExpressionReturnValueEvaluator;
 
-    private static final FeelProcessDialect DIALECT = new FeelProcessDialect();
-    public static final String ID = "FEEL";
+import com.github.javaparser.ast.expr.Expression;
 
-    @Override
-    public String name() {
-        return ID;
+public class ExpressionReturnValueSupplier extends ExpressionReturnValueEvaluator implements Supplier<Expression> {
+
+    private final Expression expression;
+
+    public ExpressionReturnValueSupplier(String lang, String expr, String rootName) {
+        super(lang, expr, rootName);
+        expression = ExpressionUtils.getObjectCreationExpr(ExpressionReturnValueEvaluator.class, lang, expr, rootName);
     }
 
     @Override
-    public ProcessDialect dialect() {
-        return DIALECT;
+    public Expression get() {
+        return expression;
     }
+
 }

@@ -16,23 +16,19 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.jbpm.bpmn2.feel;
+package org.kie.kogito.integrationtests.quarkus;
 
-import org.jbpm.process.builder.dialect.ProcessDialect;
-import org.jbpm.process.builder.dialect.ProcessDialectProvider;
+import java.util.Map;
 
-public class FeelProcessDialectProvider implements ProcessDialectProvider {
+import io.quarkus.test.junit.QuarkusTestProfile;
 
-    private static final FeelProcessDialect DIALECT = new FeelProcessDialect();
-    public static final String ID = "FEEL";
-
-    @Override
-    public String name() {
-        return ID;
-    }
+/**
+ * The application with its FEEL sandbox turned off through its own configuration.
+ */
+public class FeelSandboxOffProfile implements QuarkusTestProfile {
 
     @Override
-    public ProcessDialect dialect() {
-        return DIALECT;
+    public Map<String, String> getConfigOverrides() {
+        return Map.of("jbpm.expressions.feel.sandboxed", "false");
     }
 }

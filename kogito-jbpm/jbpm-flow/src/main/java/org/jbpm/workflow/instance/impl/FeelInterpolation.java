@@ -25,6 +25,8 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import org.jbpm.process.instance.impl.FeelErrorEvaluatorListener;
 import org.jbpm.process.instance.impl.feel.BpmnFeel;
+import org.jbpm.process.instance.impl.feel.BpmnFeelSettings;
+import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.kie.dmn.feel.FEEL;
 import org.kie.dmn.feel.lang.CompiledExpression;
 
@@ -47,11 +49,12 @@ public final class FeelInterpolation {
     }
 
     public static Object evaluate(String placeholderBody, Map<String, Object> variables) {
+        boolean sandboxed = BpmnFeelSettings.isSandboxed();
         CompiledExpression compiled = COMPILED.computeIfAbsent(
-                new CacheKey(placeholderBody, variables.keySet()),
-                key -> BpmnFeel.compile(placeholderBody, key.names));
+                new CacheKey(placeholderBody, variables.keySet(), sandboxed),
+                key -> BpmnFeel.compile(placeholderBody, BpmnFeelVariables.interpolationTypes(key.names, sandboxed), sandboxed));
 
-        FEEL feel = BpmnFeel.newFeel();
+        FEEL feel = BpmnFeel.newFeel(sandboxed);
         FeelErrorEvaluatorListener listener = new FeelErrorEvaluatorListener();
         feel.addListener(listener);
 
@@ -65,21 +68,25 @@ public final class FeelInterpolation {
 
         private final String body;
         private final Set<String> names;
+        // an expression compiled with external functions allowed must not serve a sandboxed evaluation
+        private final boolean sandboxed;
 
-        private CacheKey(String body, Set<String> names) {
+        private CacheKey(String body, Set<String> names, boolean sandboxed) {
             this.body = body;
             // sorted and copied: the caller's scope is rebuilt per evaluation and its iteration order is not fixed
             this.names = new TreeSet<>(names);
+            this.sandboxed = sandboxed;
         }
 
         @Override
         public boolean equals(Object other) {
-            return other instanceof CacheKey && body.equals(((CacheKey) other).body) && names.equals(((CacheKey) other).names);
+            return other instanceof CacheKey && body.equals(((CacheKey) other).body) && names.equals(((CacheKey) other).names)
+                    && sandboxed == ((CacheKey) other).sandboxed;
         }
 
         @Override
         public int hashCode() {
-            return 31 * body.hashCode() + names.hashCode();
+            return 31 * (31 * body.hashCode() + names.hashCode()) + Boolean.hashCode(sandboxed);
         }
     }
 }

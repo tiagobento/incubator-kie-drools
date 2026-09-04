@@ -48,6 +48,9 @@ import org.jbpm.compiler.xml.XmlProcessReader;
 import org.jbpm.compiler.xml.core.SemanticModules;
 import org.jbpm.process.core.impl.ProcessImpl;
 import org.jbpm.process.core.validation.ProcessValidatorRegistry;
+import org.jbpm.process.instance.impl.feel.BpmnFeelSettings;
+import org.jbpm.ruleflow.core.RuleFlowProcess;
+import org.jbpm.ruleflow.core.validation.FeelExpressionsValidator;
 import org.jbpm.workflow.core.impl.WorkflowProcessImpl;
 import org.jbpm.workflow.instance.WorkflowProcessParameters;
 import org.kie.api.definition.process.Process;
@@ -130,6 +133,7 @@ public class ProcessCodegen extends AbstractGenerator {
     private final List<ProcessGenerator> processGenerators = new ArrayList<>();
 
     public static ProcessCodegen ofCollectedResources(KogitoBuildContext context, Collection<CollectedResource> resources) {
+        applyFeelSettings(context);
         Map<String, byte[]> processSVGMap = new HashMap<>();
         Map<String, Throwable> processesErrors = new HashMap<>();
         boolean useSvgAddon = context.getAddonsConfig().useProcessSVG();
@@ -210,6 +214,15 @@ public class ProcessCodegen extends AbstractGenerator {
         }
     }
 
+    /**
+     * Validation compiles every FEEL expression with the engine the application will run, so the application's own
+     * setting has to be in force while its processes are built: a build tool has no runtime configuration to resolve
+     * it from. Absent, the setting returns to its default rather than keeping whatever the previous build forced.
+     */
+    private static void applyFeelSettings(KogitoBuildContext context) {
+        BpmnFeelSettings.setSandboxed(context.getApplicationProperty(BpmnFeelSettings.SANDBOXED_PROPERTY, Boolean.class).orElse(null));
+    }
+
     private static void handleValidation(KogitoBuildContext context, Map<String, Throwable> processesErrors) {
         if (!processesErrors.isEmpty()) {
             ValidationLogDecorator decorator = new ValidationLogDecorator(processesErrors);
@@ -225,6 +238,10 @@ public class ProcessCodegen extends AbstractGenerator {
         Process process = processInfo.info();
         try {
             ProcessValidatorRegistry.getInstance().getValidator(process, process.getResource()).validate(process);
+            if (process instanceof RuleFlowProcess) {
+                // every FEEL expression compiles under the application's setting, applied above, or the build fails
+                FeelExpressionsValidator.check((RuleFlowProcess) process);
+            }
         } catch (ValidationException e) {
             processesErrors.put(process.getResource().getSourcePath(), e);
         }

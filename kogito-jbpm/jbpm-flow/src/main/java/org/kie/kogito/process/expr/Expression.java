@@ -16,23 +16,21 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.jbpm.bpmn2.feel;
+package org.kie.kogito.process.expr;
 
-import org.jbpm.process.builder.dialect.ProcessDialect;
-import org.jbpm.process.builder.dialect.ProcessDialectProvider;
+import org.kie.kogito.internal.process.runtime.KogitoProcessContext;
 
-public class FeelProcessDialectProvider implements ProcessDialectProvider {
+public interface Expression {
 
-    private static final FeelProcessDialect DIALECT = new FeelProcessDialect();
-    public static final String ID = "FEEL";
+    <T> T eval(Object target, Class<T> returnClass, KogitoProcessContext context);
 
-    @Override
-    public String name() {
-        return ID;
-    }
+    boolean isValid();
 
-    @Override
-    public ProcessDialect dialect() {
-        return DIALECT;
-    }
+    Exception validationError();
+
+    void assign(Object target, Object value, KogitoProcessContext context);
+
+    String asString();
+
+    String lang();
 }

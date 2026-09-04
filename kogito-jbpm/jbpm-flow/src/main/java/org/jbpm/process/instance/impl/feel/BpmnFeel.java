@@ -19,7 +19,9 @@
 package org.jbpm.process.instance.impl.feel;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 import org.jbpm.process.instance.impl.FeelErrorEvaluatorListener;
@@ -28,15 +30,18 @@ import org.kie.dmn.api.feel.runtime.events.FEELEvent;
 import org.kie.dmn.feel.FEEL;
 import org.kie.dmn.feel.lang.CompiledExpression;
 import org.kie.dmn.feel.lang.CompilerContext;
+import org.kie.dmn.feel.lang.Type;
 import org.kie.dmn.feel.lang.impl.FEELBuilder;
+import org.kie.dmn.feel.lang.types.BuiltInType;
 import org.kie.dmn.feel.parser.feel11.profiles.KieExtendedFEELProfile;
 
 /**
  * The single place where BPMN builds a FEEL engine.
  *
- * BPMN evaluates expressions coming from authored and imported models, so its FEEL surface is bounded by construction:
- * external functions, which reflectively invoke an arbitrary class, are disabled. No call site in the process modules
- * should build a FEEL engine directly - go through here, so the guarantee holds everywhere.
+ * BPMN evaluates expressions coming from authored and imported models, so by default its FEEL surface is bounded by
+ * construction: external functions, which reflectively invoke an arbitrary class, are disabled. An application that
+ * wants them turns the sandbox off with {@link BpmnFeelSettings#SANDBOXED_PROPERTY}. No call site in the process
+ * modules should build a FEEL engine directly - go through here, so the setting holds everywhere.
  */
 public final class BpmnFeel {
 
@@ -44,13 +49,21 @@ public final class BpmnFeel {
     }
 
     /**
-     * A new engine, safe for BPMN. Engines are not shared: listeners are registered per instance.
+     * A new engine in the configured mode. Engines are not shared: listeners are registered per instance.
      */
     public static FEEL newFeel() {
-        return FEELBuilder.builder()
-                .withProfiles(List.of(new KieExtendedFEELProfile()))
-                .withExternalFunctionsDisabled()
-                .build();
+        return newFeel(BpmnFeelSettings.isSandboxed());
+    }
+
+    /**
+     * A new engine: sandboxed, one that refuses an <code>external</code> function definition; otherwise a stock one.
+     */
+    public static FEEL newFeel(boolean sandboxed) {
+        FEELBuilder.Builder builder = FEELBuilder.builder().withProfiles(List.of(new KieExtendedFEELProfile()));
+        if (sandboxed) {
+            builder = builder.withExternalFunctionsDisabled();
+        }
+        return builder.build();
     }
 
     public static CompiledExpression compile(String expression) {
@@ -64,10 +77,24 @@ public final class BpmnFeel {
      * runtime, where the result is cached by the evaluator owning the expression.
      */
     public static CompiledExpression compile(String expression, Collection<String> inputVariableNames) {
-        FEEL feel = newFeel();
+        return compile(expression, inputVariableNames, BpmnFeelSettings.isSandboxed());
+    }
+
+    /**
+     * Compiles in the given mode; see {@link #compile(String, Collection)}.
+     */
+    public static CompiledExpression compile(String expression, Collection<String> inputVariableNames, boolean sandboxed) {
+        return compile(expression, dynamicTypes(inputVariableNames), sandboxed);
+    }
+
+    /**
+     * Compiles in the given mode against a typed scope; see {@link #compile(String, Collection)}.
+     */
+    public static CompiledExpression compile(String expression, Map<String, Type> inputVariableTypes, boolean sandboxed) {
+        FEEL feel = newFeel(sandboxed);
         FeelErrorEvaluatorListener listener = new FeelErrorEvaluatorListener();
         feel.addListener(listener);
-        CompiledExpression compiled = compileQuietly(feel, expression, inputVariableNames);
+        CompiledExpression compiled = compileQuietly(feel, expression, inputVariableTypes);
         failOnError(listener, expression);
         return compiled;
     }
@@ -79,9 +106,27 @@ public final class BpmnFeel {
      * were when every evaluation recompiled the expression from scratch.
      */
     public static CompiledExpression compileQuietly(FEEL feel, String expression, Collection<String> inputVariableNames) {
+        return compileQuietly(feel, expression, dynamicTypes(inputVariableNames));
+    }
+
+    /**
+     * Compiles against a typed scope, without failing; see {@link #compileQuietly(FEEL, String, Collection)}.
+     */
+    public static CompiledExpression compileQuietly(FEEL feel, String expression, Map<String, Type> inputVariableTypes) {
         CompilerContext context = feel.newCompilerContext();
-        inputVariableNames.forEach(name -> context.addInputVariable(name, null));
+        inputVariableTypes.forEach(context::addInputVariableType);
         return feel.compile(expression, context);
+    }
+
+    /**
+     * Names declared with no type of their own, which the compiler resolves dynamically: a path below one is accepted
+     * when the expression is compiled and resolved as it is evaluated. A name declared with a <code>null</code> type
+     * instead, or handed to the compiler as a value, has every path below it rejected as an unknown variable.
+     */
+    public static Map<String, Type> dynamicTypes(Collection<String> names) {
+        Map<String, Type> types = new HashMap<>();
+        names.forEach(name -> types.put(name, BuiltInType.UNKNOWN));
+        return types;
     }
 
     /**

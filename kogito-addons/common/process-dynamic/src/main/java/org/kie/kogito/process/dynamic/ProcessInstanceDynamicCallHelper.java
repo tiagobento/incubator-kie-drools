@@ -24,9 +24,12 @@ import java.util.Map;
 
 import org.drools.core.common.InternalKnowledgeRuntime;
 import org.jbpm.process.instance.InternalProcessRuntime;
+import org.jbpm.process.instance.KogitoProcessContextImpl;
+import org.jbpm.util.ContextFactory;
 import org.jbpm.workflow.core.impl.WorkflowProcessImpl;
 import org.jbpm.workflow.instance.node.DynamicUtils;
 import org.kie.kogito.process.Process;
+import org.kie.kogito.process.expr.ExpressionHandlerFactory;
 import org.kie.kogito.process.impl.AbstractProcessInstance;
 import org.kogito.workitem.rest.RestWorkItemHandler;
 
@@ -61,9 +64,12 @@ public class ProcessInstanceDynamicCallHelper {
             parameters.put(RestWorkItemHandler.PATH_PARAM_RESOLVER, new DynamicPathParamResolver(processInstanceId));
             WorkItemHandlerResultHolder holder = new WorkItemHandlerResultHolder();
             parameters.put(RestWorkItemHandler.RESULT_HANDLER, holder);
-            DynamicUtils.addDynamicWorkItem(pi, runtime, RestWorkItemHandler.REST_TASK_TYPE, parameters);
+            KogitoProcessContextImpl context = ContextFactory.fromItem(DynamicUtils.addDynamicWorkItem(pi, runtime, RestWorkItemHandler.REST_TASK_TYPE, parameters));
 
-            holder.getResult().forEach(pi::setVariable);
+            Map<String, Object> variables = input.getOutputExpression() != null
+                    ? ExpressionHandlerFactory.get(input.getOutputExpressionLang(), input.getOutputExpression()).eval(holder.getResult(), Map.class, context)
+                    : holder.getResult();
+            variables.forEach(pi::setVariable);
             return null;
         });
 

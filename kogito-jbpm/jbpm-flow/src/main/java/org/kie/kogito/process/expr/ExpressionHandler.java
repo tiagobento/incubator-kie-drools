@@ -16,13 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-package org.jbpm.bpmn2.feel;
+package org.kie.kogito.process.expr;
 
-public class FeelCompilationException extends RuntimeException {
+public interface ExpressionHandler {
 
-    private static final long serialVersionUID = 3807265813594743434L;
+    Expression get(String expr);
 
-    public FeelCompilationException(String message) {
-        super(message);
-    }
+    String lang();
 }

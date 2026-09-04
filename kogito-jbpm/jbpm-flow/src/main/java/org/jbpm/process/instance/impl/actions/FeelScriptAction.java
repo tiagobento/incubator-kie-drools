@@ -27,6 +27,7 @@ import org.jbpm.process.core.context.variable.VariableScope;
 import org.jbpm.process.instance.impl.Action;
 import org.jbpm.process.instance.impl.FeelErrorEvaluatorListener;
 import org.jbpm.process.instance.impl.feel.BpmnFeel;
+import org.jbpm.process.instance.impl.feel.BpmnFeelSettings;
 import org.jbpm.process.instance.impl.feel.BpmnFeelTypes;
 import org.jbpm.process.instance.impl.feel.BpmnFeelVariables;
 import org.kie.dmn.feel.FEEL;
@@ -50,6 +51,7 @@ public class FeelScriptAction implements Action {
     private final String expression;
 
     private transient CompiledExpression compiledExpression;
+    private transient boolean compiledSandboxed;
 
     public FeelScriptAction(String expression) {
         this.expression = expression;
@@ -61,19 +63,21 @@ public class FeelScriptAction implements Action {
 
     @Override
     public void execute(KogitoProcessContext context) throws Exception {
-        FEEL feel = BpmnFeel.newFeel();
+        boolean sandboxed = BpmnFeelSettings.isSandboxed();
+        FEEL feel = BpmnFeel.newFeel(sandboxed);
         FeelErrorEvaluatorListener listener = new FeelErrorEvaluatorListener();
         feel.addListener(listener);
 
-        Map<String, Object> variables = BpmnFeelVariables.of(context);
-        CompiledExpression compiled = compiledExpression != null
+        Map<String, Object> variables = BpmnFeelVariables.of(context, sandboxed);
+        CompiledExpression compiled = compiledExpression != null && compiledSandboxed == sandboxed
                 ? compiledExpression
-                : BpmnFeel.compileQuietly(feel, expression, variables.keySet());
+                : BpmnFeel.compileQuietly(feel, expression, BpmnFeelVariables.expressionTypes(variables.keySet(), sandboxed));
 
         Object result = feel.evaluate(compiled, variables);
 
         BpmnFeel.failOnError(listener, expression);
         compiledExpression = compiled;
+        compiledSandboxed = sandboxed;
 
         if (!(result instanceof Map)) {
             throw new IllegalArgumentException(String.format(

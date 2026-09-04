@@ -1,0 +1,75 @@
+<!--
+  ~ Licensed to the Apache Software Foundation (ASF) under one
+  ~ or more contributor license agreements.  See the NOTICE file
+  ~ distributed with this work for additional information
+  ~ regarding copyright ownership.  The ASF licenses this file
+  ~ to you under the Apache License, Version 2.0 (the
+  ~ "License"); you may not use this file except in compliance
+  ~ with the License.  You may obtain a copy of the License at
+  ~
+  ~   http://www.apache.org/licenses/LICENSE-2.0
+  ~
+  ~ Unless required by applicable law or agreed to in writing,
+  ~ software distributed under the License is distributed on an
+  ~ "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+  ~ KIND, either express or implied.  See the License for the
+  ~ specific language governing permissions and limitations
+  ~ under the License.
+  -->
+<bpmn2:definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xmlns:bpmn2="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                   xmlns:drools="http://www.jboss.org/drools"
+                   id="_FeelKcontext"
+                   expressionLanguage="http://www.omg.org/spec/DMN/20180521/FEEL/"
+                   targetNamespace="http://www.omg.org/bpmn20">
+  <bpmn2:itemDefinition id="_stringItem" structureRef="String"/>
+  <!-- Every reach into kcontext here is one the sandbox documents and the live objects answer to as well, so the
+       document builds and runs in either mode: it proves the documented shape is what an expression, a script and
+       a placeholder see. (kcontext.variables is sandboxed-only, so it stays out of here; the unit tests cover it.) -->
+  <bpmn2:process id="FeelKcontext" drools:packageName="org.jbpm.bpmn2.feel" drools:version="1.0" name="BPMN2-FeelKcontext" isExecutable="true" processType="Public">
+    <bpmn2:extensionElements>
+      <drools:metaData name="customDescription">
+        <drools:metaValue><![CDATA[#{processInstance.processId} for #{who}, instance #{processInstanceId}]]></drools:metaValue>
+      </drools:metaData>
+    </bpmn2:extensionElements>
+    <bpmn2:property id="who" itemSubjectRef="_stringItem" name="who"/>
+    <bpmn2:property id="path" itemSubjectRef="_stringItem" name="path"/>
+    <bpmn2:property id="nodeSeen" itemSubjectRef="_stringItem" name="nodeSeen"/>
+    <bpmn2:property id="procId" itemSubjectRef="_stringItem" name="procId"/>
+    <bpmn2:startEvent id="start">
+      <bpmn2:outgoing>start-record</bpmn2:outgoing>
+    </bpmn2:startEvent>
+    <bpmn2:sequenceFlow id="start-record" sourceRef="start" targetRef="record"/>
+    <bpmn2:scriptTask id="record" name="Record" scriptFormat="application/feel">
+      <bpmn2:incoming>start-record</bpmn2:incoming>
+      <bpmn2:outgoing>record-split</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[{ nodeSeen: kcontext.nodeInstance.nodeName, procId: kcontext.processInstance.processId }]]></bpmn2:script>
+    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="record-split" sourceRef="record" targetRef="split"/>
+    <bpmn2:exclusiveGateway id="split" gatewayDirection="Diverging">
+      <bpmn2:incoming>record-split</bpmn2:incoming>
+      <bpmn2:outgoing>split-hit</bpmn2:outgoing>
+      <bpmn2:outgoing>split-miss</bpmn2:outgoing>
+    </bpmn2:exclusiveGateway>
+    <bpmn2:sequenceFlow id="split-hit" sourceRef="split" targetRef="hit">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression"><![CDATA[kcontext.processInstance.processId = "FeelKcontext" and kcontext.processInstance.state = 1 and kcontext.processInstance.startDate <= now() and who != null]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:sequenceFlow id="split-miss" sourceRef="split" targetRef="miss">
+      <bpmn2:conditionExpression xsi:type="bpmn2:tFormalExpression"><![CDATA[kcontext.processInstance.processId != "FeelKcontext"]]></bpmn2:conditionExpression>
+    </bpmn2:sequenceFlow>
+    <bpmn2:scriptTask id="hit" name="Hit" scriptFormat="application/feel">
+      <bpmn2:incoming>split-hit</bpmn2:incoming>
+      <bpmn2:outgoing>hit-end</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[{ path: "hit" }]]></bpmn2:script>
+    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="hit-end" sourceRef="hit" targetRef="end1"/>
+    <bpmn2:endEvent id="end1"><bpmn2:incoming>hit-end</bpmn2:incoming></bpmn2:endEvent>
+    <bpmn2:scriptTask id="miss" name="Miss" scriptFormat="application/feel">
+      <bpmn2:incoming>split-miss</bpmn2:incoming>
+      <bpmn2:outgoing>miss-end</bpmn2:outgoing>
+      <bpmn2:script><![CDATA[{ path: "miss" }]]></bpmn2:script>
+    </bpmn2:scriptTask>
+    <bpmn2:sequenceFlow id="miss-end" sourceRef="miss" targetRef="end2"/>
+    <bpmn2:endEvent id="end2"><bpmn2:incoming>miss-end</bpmn2:incoming></bpmn2:endEvent>
+  </bpmn2:process>
+</bpmn2:definitions>
